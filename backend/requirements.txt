@@ -1,4 +1,8 @@
 fastapi
 uvicorn
-python-dotenv
-google-generativeai
+python-dotenv==1.0.1
+google-generativeai==0.3.2
+requests
+PyGithub
+jira==3.5.1
+pymongo==4.6.2
