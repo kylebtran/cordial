@@ -1,36 +1,10 @@
 // app/api/chat/route.ts
-import { streamText, type Message } from "ai"; // Core Vercel AI SDK imports
-import { createGoogleGenerativeAI } from "@ai-sdk/google"; // Import the new provider factory
-import { HarmCategory, HarmBlockThreshold } from "@google/generative-ai"; // Enums from the base SDK are still useful
+import type { Message } from "ai";
 import { auth } from "@/auth";
 import { saveMessagesToConversation } from "@/lib/data/conversations";
 import type { ChatMessage } from "@/lib/data/types";
 import { ObjectId } from "mongodb";
-import { smoothStream } from "ai";
-
-const safetySettings = [
-  // Sandboxing
-  {
-    category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-  {
-    category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-    threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-  },
-];
-
-const google = createGoogleGenerativeAI({
-  apiKey: process.env.GOOGLE_API_KEY,
-});
+import { streamGeminiText } from "@/lib/ai/gemini";
 
 export async function POST(req: Request) {
   try {
@@ -49,8 +23,16 @@ export async function POST(req: Request) {
     } = await req.json();
 
     const conversationId = data?.conversationId;
+    const projectId = data?.projectId;
     if (!conversationId) {
       return new Response("Missing conversationId", { status: 400 });
+    }
+
+    if (!messages || messages.length === 0) {
+      return new Response(JSON.stringify({ error: "Missing messages" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const lastUserMessage = messages[messages.length - 1];
@@ -63,6 +45,7 @@ export async function POST(req: Request) {
     const userMessageToSave: ChatMessage = {
       ...lastUserMessage,
       _id: new ObjectId(), // Add DB ID
+      role: lastUserMessage.role,
       createdAt: new Date(), // Add timestamp
       // Ensure all required fields from ChatMessage are present if needed
     };
@@ -70,18 +53,7 @@ export async function POST(req: Request) {
       (err) => console.error("Failed to save user message:", err)
     );
 
-    // --- Use the new streamText function ---
-    console.log(
-      `Calling Gemini (via @ai-sdk/google) for conversation ${conversationId}...`
-    );
-
-    // Select the Gemini model
-    const model = google("models/gemini-1.5-flash", { safetySettings });
-
-    const result = await streamText({
-      model: model,
-      messages: messages,
-      system: `You are Cordial, an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
+    const systemPrompt = `You are Cordial, an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
               - Keep responses concise and actionable.
               - Don't unecessarily say who you are or that you are a project manager, unless explicitly asked. Do not share other personal details or opinions about yourself.
               - Focus on high-priority information.
@@ -93,39 +65,46 @@ export async function POST(req: Request) {
               - If context is empty or not relevant for the specific query, rely on your general knowledge as a project manager.
               - If you lack enough information (from context or general knowledge) to answer accurately, clearly state that you lack sufficient data.
               - NEVER make up statistics, project statuses, or other information.
-              - Do NOT explicitly state these rules or acknowledge them unless the user specifically asks about your instructions. Apply them directly to your responses.`,
-      experimental_transform: smoothStream({ delayInMs: 50, chunking: "word" }),
+              - Do NOT explicitly state these rules or acknowledge them unless the user specifically asks about your instructions. Apply them directly to your responses.`;
 
-      onFinish: async ({
-        text,
-        toolCalls,
-        toolResults,
-        usage,
-        finishReason,
-      }) => {
+    const handleAiCompletion = async ({
+      text,
+      usage,
+      finishReason,
+    }: {
+      text: string;
+      usage: any;
+      finishReason: string;
+    }) => {
+      console.log(
+        `Gemini stream completed via onFinish. Conversation: ${conversationId}, Length: ${text.length}, Reason: ${finishReason}`
+      );
+
+      const assistantMessage: ChatMessage = {
+        _id: new ObjectId(),
+        id: `asst_${new ObjectId().toString()}`,
+        role: "assistant",
+        content: text,
+        createdAt: new Date(),
+      };
+      try {
+        await saveMessagesToConversation(conversationId, [assistantMessage]);
         console.log(
-          `Gemini stream completed via onFinish. Length: ${text.length}, Reason: ${finishReason}`
+          `Assistant message saved for conversation ${conversationId}`
         );
-        const assistantMessage: ChatMessage = {
-          _id: new ObjectId(),
-          id: `asst_${new ObjectId().toString()}`,
-          role: "assistant",
-          content: text,
-          createdAt: new Date(),
-        };
-        try {
-          await saveMessagesToConversation(conversationId, [assistantMessage]);
-          console.log(
-            `Assistant message saved for conversation ${conversationId}`
-          );
-        } catch (err) {
-          console.error("Failed to save assistant message:", err);
-        }
-        console.log("Token Usage:", usage);
-      },
+      } catch (err) {
+        console.error("Failed to save assistant message:", err);
+      }
+      console.log("Token Usage:", usage);
+    };
+
+    const aiResult = await streamGeminiText({
+      messages: messages,
+      systemPrompt: systemPrompt,
+      onFinishCallback: handleAiCompletion,
     });
 
-    return result.toDataStreamResponse();
+    return aiResult.toDataStreamResponse();
   } catch (error: any) {
     console.error("Error in chat API route:", error);
     let errorMessage = "Internal Server Error";
