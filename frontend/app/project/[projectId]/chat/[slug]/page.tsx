@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { getConversationIfOwner } from "@/lib/data/conversations"; // Adjust path if needed
 import type { Conversation, Project, Role } from "@/lib/data/types"; // Adjust path if needed
 import { getProjectDetails } from "@/lib/data/projects";
+import { ChatInterface } from "@/components/ChatInterface";
 
 interface PageProps {
   params: {
@@ -66,19 +67,14 @@ export default async function ChatPage({ params }: PageProps) {
         </Link>
       </header>
 
-      {/* --- Chatbot UI Placeholder --- */}
-      <div className="flex-grow overflow-y-auto mb-4 p-4 border rounded bg-gray-50">
-        <p className="text-center text-gray-500">Chat message history...</p>
-      </div>
-      <footer className="mt-auto">
-        <input
-          type="text"
-          placeholder="Type your message..."
-          className="w-full p-3 border rounded"
-          disabled
+      {/* Main Chat Area - Render the Client Component */}
+      <main className="flex-grow container mx-auto w-full overflow-hidden">
+        <ChatInterface
+          conversationId={conversationId}
+          projectId={projectId}
+          initialMessages={conversation.messages}
         />
-      </footer>
-      {/* ----------------------------- */}
+      </main>
     </div>
   );
 }
