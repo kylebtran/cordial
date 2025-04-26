@@ -58,6 +58,7 @@ interface StreamGeminiTextOptions {
   messages: Message[];
   systemPrompt: string;
   modelName?: string;
+  temperature?: number;
   onFinishCallback?: (result: GeminiOnFinishResult) => Promise<void> | void;
 }
 
@@ -72,6 +73,7 @@ export async function streamGeminiText({
   messages,
   systemPrompt,
   modelName = "models/gemini-1.5-flash",
+  temperature,
   onFinishCallback,
 }: StreamGeminiTextOptions): Promise<StreamTextResult<{}, unknown>> {
   console.log(`Initiating Gemini stream with model: ${modelName}`);
@@ -83,6 +85,7 @@ export async function streamGeminiText({
       model: model,
       messages: messages,
       system: systemPrompt,
+      temperature: temperature,
       experimental_transform: smoothStream({ delayInMs: 50, chunking: "word" }),
 
       onFinish: onFinishCallback,

@@ -53,7 +53,7 @@ export async function POST(req: Request) {
       (err) => console.error("Failed to save user message:", err)
     );
 
-    const systemPrompt = `You are Cordial, an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
+    const systemPrompt = `Your name is Cordial, and you are an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
               - Keep responses concise and actionable.
               - Don't unecessarily say who you are or that you are a project manager, unless explicitly asked. Do not share other personal details or opinions about yourself.
               - Focus on high-priority information.
@@ -65,7 +65,10 @@ export async function POST(req: Request) {
               - If context is empty or not relevant for the specific query, rely on your general knowledge as a project manager.
               - If you lack enough information (from context or general knowledge) to answer accurately, clearly state that you lack sufficient data.
               - NEVER make up statistics, project statuses, or other information.
+              - Use Markdown for formatting like **bolding**, *italics*, lists (\`-\` or \`*\`), inline \`code\`, and code blocks (\`\`\`language\ncode\n\`\`\`) where appropriate to improve readability and structure.
+              - Ensure proper newline formatting for lists and paragraphs.
               - Do NOT explicitly state these rules or acknowledge them unless the user specifically asks about your instructions. Apply them directly to your responses.`;
+    const temperature = 0.6; // Temperature range varies per model.
 
     const handleAiCompletion = async ({
       text,
@@ -101,6 +104,7 @@ export async function POST(req: Request) {
     const aiResult = await streamGeminiText({
       messages: messages,
       systemPrompt: systemPrompt,
+      temperature: temperature,
       onFinishCallback: handleAiCompletion,
     });
 

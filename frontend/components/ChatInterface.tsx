@@ -4,6 +4,8 @@
 import { useChat, type Message } from "ai/react";
 import { useState } from "react";
 import type { SerializedChatMessage } from "@/lib/data/types";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 // Map initial messages fetched from DB to the format useChat expects (if needed)
 // Ensure they have string IDs for React keys
@@ -122,16 +124,36 @@ export function ChatInterface({
               m.role === "user" ? "text-right" : "text-left"
             }`}
           >
-            <span
+            <div
               className={`inline-block p-3 rounded-lg ${
                 m.role === "user"
                   ? "bg-blue-500 text-white"
                   : "bg-gray-200 text-gray-800"
-              }`}
+              } prose break-words`}
             >
-              <strong>{m.role === "user" ? "You" : "AI"}:</strong> {m.content}
+              <strong>{m.role === "user" ? "You" : "AI"}:</strong>
+              <ReactMarkdown
+                children={m.content}
+                remarkPlugins={[remarkGfm]}
+                // Optional: Customize rendering of specific elements if needed
+                // components={{
+                //   // Example: Style code blocks
+                //   code({node, inline, className, children, ...props}) {
+                //     const match = /language-(\w+)/.exec(className || '')
+                //     return !inline ? (
+                //       <code className={`${className} bg-gray-700 text-white p-2 rounded block overflow-x-auto`} {...props}>
+                //         {children}
+                //       </code>
+                //     ) : (
+                //       <code className={`${className} bg-gray-300 text-red-600 px-1 rounded`} {...props}>
+                //         {children}
+                //       </code>
+                //     )
+                //   }
+                // }}
+              />
               {/* TODO: Display image/file previews if message contains them */}
-            </span>
+            </div>
           </div>
         ))}
         {isLoading && (
