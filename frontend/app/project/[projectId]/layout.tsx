@@ -10,6 +10,7 @@ import type {
   SidebarConversationInfo,
 } from "@/lib/data/types";
 import { ChatSidebar } from "@/components/ChatSidebar"; // The client component sidebar
+import { Sidebar } from "@/components/Sidebar";
 
 interface ProjectLayoutProps {
   params: {
@@ -58,7 +59,13 @@ export default async function ProjectLayout({
   );
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex h-screen overflow-hidden font-sans">
+      <Sidebar
+        projectId={projectId}
+        projectName={project.name}
+        userName={session.user.name || "Guest"}
+        userRole={userRole}
+      />
       {/* Sidebar Component */}
       <ChatSidebar
         projectId={projectId} // Pass projectId for link generation/new chat action
@@ -68,7 +75,7 @@ export default async function ProjectLayout({
       />
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex-1 overflow-y-auto mt-12">
         {/* The nested page (overview or chat/[slug]) will be rendered here */}
         {children}
       </main>

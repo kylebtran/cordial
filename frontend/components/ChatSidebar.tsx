@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation"; // To identify the active chat
 import type { Role, SidebarConversationInfo } from "@/lib/data/types";
 import { CreateNewChatButton } from "@/components/CreateNewChatButton"; // Button using Server Action
+import { useState } from "react";
+import { Searchbar } from "./Searchbar";
 
 interface ChatSidebarProps {
   projectId: string;
@@ -16,29 +18,26 @@ interface ChatSidebarProps {
 export function ChatSidebar({
   projectId,
   initialConversations, // Could be updated via state/revalidation later
-  projectName,
-  userRole,
 }: ChatSidebarProps) {
   const params = useParams<{ slug?: string }>(); // Get current chat slug if available
   const activeConversationId = params?.slug;
+  const [search, setSearch] = useState<string>("");
 
   return (
-    <aside className="w-64 flex flex-col p-4 overflow-y-auto">
-      <h2 className="text-xl font-semibold mb-2 border-b border-gray-700 pb-2">
-        {projectName}
-      </h2>
-      <p className="text-xs text-gray-400 mb-4">Role: {userRole}</p>
-
+    <aside className="w-[260px] flex flex-col gap-4 p-4 overflow-y-auto border-x border-t border-outline mt-12">
       {/* Button to create a new chat */}
-      <CreateNewChatButton projectId={projectId} />
+      <div className="flex flex-col w-full gap-2">
+        <Searchbar search={search} setSearch={setSearch} />
+        <CreateNewChatButton projectId={projectId} />
+      </div>
 
-      <nav className="mt-6 flex-grow">
-        <h3 className="text-sm font-semibold text-gray-400 mb-2 uppercase">
-          Your Chats
+      <nav className="flex-grow">
+        <h3 className="text-[12px] font-semibold text-foreground/70 mb-2 uppercase">
+          Recents
         </h3>
-        <ul className="space-y-1">
+        <ul className="space-y-0">
           {initialConversations.length === 0 ? (
-            <li className="text-sm text-gray-500 px-2">No chats yet.</li>
+            <li className="text-foreground px-2">No chats yet.</li>
           ) : (
             initialConversations.map((convo) => {
               const isActive = activeConversationId === convo._id.toString();
@@ -46,10 +45,10 @@ export function ChatSidebar({
                 <li key={convo._id.toString()}>
                   <Link
                     href={`/project/${projectId}/chat/${convo._id.toString()}`}
-                    className={`block px-3 py-2 rounded-md text-sm font-medium truncate ${
+                    className={`block px-3 py-2 rounded text-sm font-medium truncate transition-all ease-in-out duration-300 ${
                       isActive
-                        ? "bg-gray-900 text-white" // Active chat styling
-                        : "text-gray-300 hover:bg-gray-700 hover:text-white" // Inactive chat styling
+                        ? "bg-outline/50" // Active chat styling
+                        : "text-foreground/70 hover:bg-outline/20 hover:text-white" // Inactive chat styling
                     }`}
                     title={
                       convo.title ||
@@ -69,9 +68,6 @@ export function ChatSidebar({
       </nav>
 
       {/* Footer or User Info could go here */}
-      <div className="mt-auto pt-4 border-t border-gray-700">
-        {/* Example: Link back to project settings or dashboard */}
-      </div>
     </aside>
   );
 }
