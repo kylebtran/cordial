@@ -3,6 +3,7 @@
 
 import { useTransition } from "react";
 import { createNewConversationAction } from "@/server/actions/conversations"; // Adjust path
+import { PlusIcon } from "lucide-react";
 
 interface Props {
   projectId: string;
@@ -26,8 +27,9 @@ export function CreateNewChatButton({ projectId }: Props) {
     <button
       onClick={handleClick}
       disabled={isPending}
-      className="w-full flex items-center justify-center gap-2 px-3 py-2 mb-4 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full h-8 flex items-center gap-2 px-2 text-[12px] font-semibold text-background bg-accent rounded-md hover:opacity-80 focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
     >
+      <PlusIcon strokeWidth={2} width={16} />
       {isPending ? "Creating..." : "New Chat"}
     </button>
   );

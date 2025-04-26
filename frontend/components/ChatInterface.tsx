@@ -2,7 +2,13 @@
 "use client";
 
 import { useChat, type Message as VercelAiMessage } from "ai/react";
-import React, { useState, useRef, ChangeEvent, FormEvent } from "react"; // Import FormEvent
+import React, {
+  useState,
+  useRef,
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+} from "react"; // Import FormEvent
 import type { SerializedChatMessage } from "@/lib/data/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -62,6 +68,14 @@ export function ChatInterface({
   const [isUploading, setIsUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
+  }, [messages]);
 
   // --- File Upload Handler ---
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -181,9 +195,12 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full max-h-screen overflow-hidden">
+    <div className="flex flex-col h-full max-h-screen overflow-hidden items-center">
       {/* Message display area */}
-      <div className="flex-grow overflow-y-auto mb-4 p-4 space-y-4">
+      <div
+        ref={messagesContainerRef}
+        className="flex-grow overflow-y-auto mb-4 space-y-4 w-[60%]"
+      >
         {/* ... message mapping ... */}
         {messages.map((m) => (
           <div

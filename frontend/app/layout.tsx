@@ -3,6 +3,36 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "@/app/globals.css";
 import { SessionProvider } from "next-auth/react";
 import { auth } from "@/auth";
+import localFont from "next/font/local";
+
+const tartuffo = localFont({
+  src: [
+    {
+      path: "./fonts/Tartuffo_Trial-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "./fonts/Tartuffo_Trial-Light.otf",
+      weight: "300",
+      style: "normal",
+    },
+  ],
+  variable: "--font-tartuffo",
+  display: "swap",
+});
+
+const fixel = localFont({
+  src: [
+    {
+      path: "./fonts/FixelVariable.ttf",
+      weight: "",
+      style: "normal",
+    },
+  ],
+  variable: "--font-fixel",
+  display: "swap",
+});
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -29,7 +59,7 @@ export default async function RootLayout({
     <SessionProvider session={session}>
       <html lang="en">
         <body
-          className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+          className={`${geistSans.variable} ${geistMono.variable} ${tartuffo.variable} ${fixel.variable} antialiased`}
         >
           {children}
         </body>
