@@ -18,8 +18,6 @@ interface ChatSidebarProps {
 export function ChatSidebar({
   projectId,
   initialConversations, // Could be updated via state/revalidation later
-  projectName,
-  userRole,
 }: ChatSidebarProps) {
   const params = useParams<{ slug?: string }>(); // Get current chat slug if available
   const activeConversationId = params?.slug;
@@ -70,9 +68,6 @@ export function ChatSidebar({
       </nav>
 
       {/* Footer or User Info could go here */}
-      <div className="mt-auto pt-4 border-t border-gray-700">
-        {/* Example: Link back to project settings or dashboard */}
-      </div>
     </aside>
   );
 }

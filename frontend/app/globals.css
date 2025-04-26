@@ -43,3 +43,16 @@ body {
   descent-override: 25%; /* Controls space below characters */
   line-gap-override: 0%; /* Reduces extra line spacing */
 }
+
+.prose pre {
+  background-color: #282c34;
+}
+
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}

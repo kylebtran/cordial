@@ -63,6 +63,7 @@ export default async function ProjectLayout({
       <Sidebar
         projectId={projectId}
         projectName={project.name}
+        userName={session.user.name || "Guest"}
         userRole={userRole}
       />
       {/* Sidebar Component */}

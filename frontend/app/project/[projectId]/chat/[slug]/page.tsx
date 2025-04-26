@@ -76,25 +76,18 @@ export default async function ChatPage({ params }: PageProps) {
     });
 
   return (
-    <div className="container mx-auto p-4 flex flex-col h-screen">
-      <header className="mb-4 pb-4 border-b">
-        <h1 className="text-2xl font-bold">
+    <div className="container mx-auto flex flex-col h-full">
+      <header className="pb-3 border-outline">
+        <h1 className="ml-4 mt-3 text-xl font-medium">
           {conversation.title ||
             `Chat from ${new Date(
               conversation.createdAt
             ).toLocaleDateString()}`}
         </h1>
-        {/* Link back to the specific project's overview page */}
-        <Link
-          href={`/project/${conversation.projectId.toString()}/overview`}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          Back to Project Overview
-        </Link>
       </header>
 
       {/* Main Chat Area - Render the Client Component */}
-      <main className="flex-grow container mx-auto w-full overflow-hidden">
+      <main className="flex flex-grow container mx-auto w-full overflow-hidden justify-center">
         <ChatInterface
           conversationId={conversationId}
           projectId={projectId}

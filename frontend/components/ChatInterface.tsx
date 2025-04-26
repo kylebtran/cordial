@@ -12,6 +12,9 @@ import React, {
 import type { SerializedChatMessage } from "@/lib/data/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { dark, oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { ArrowUpIcon, PlusIcon, XIcon } from "lucide-react";
 
 // Type for the metadata of a successfully uploaded and staged file
 interface StagedFileInfo {
@@ -195,13 +198,15 @@ export function ChatInterface({
   };
 
   return (
-    <div className="flex flex-col h-full max-h-screen overflow-hidden items-center">
+    <div className="flex flex-col h-full max-h-screen overflow-hidden items-center min-w-full">
       {/* Message display area */}
+      <div className="absolute w-[60%] h-12 bg-gradient-to-b from-background to-transparent" />
       <div
         ref={messagesContainerRef}
-        className="flex-grow overflow-y-auto mb-4 space-y-4 w-[60%]"
+        className="flex-grow overflow-y-auto space-y-4 w-[60%] scrollbar-hide"
       >
         {/* ... message mapping ... */}
+        <div className="h-4" />
         {messages.map((m) => (
           <div
             key={m.id}
@@ -210,11 +215,9 @@ export function ChatInterface({
             }`}
           >
             <div
-              className={`inline-block p-3 rounded-lg max-w-xl md:max-w-2xl lg:max-w-3xl ${
-                m.role === "user"
-                  ? "bg-blue-500 text-white"
-                  : "bg-gray-200 text-gray-800"
-              } prose break-words`}
+              className={`inline-block text-foreground ${
+                m.role === "user" ? "bg-outline px-4 py-2 rounded" : ""
+              } prose-invert prose break-words`}
             >
               <ReactMarkdown
                 children={m.content}
@@ -223,28 +226,35 @@ export function ChatInterface({
                   a: ({ node, ...props }) => (
                     <a {...props} target="_blank" rel="noopener noreferrer" />
                   ),
+                  code({ node, className, children, ...props }) {
+                    const match = /language-(\w+)/.exec(className || "");
+                    return match ? (
+                      <SyntaxHighlighter
+                        style={oneDark}
+                        language={match[1]}
+                        PreTag="div"
+                      >
+                        {String(children).replace(/\n$/, "")}
+                      </SyntaxHighlighter>
+                    ) : (
+                      <code
+                        className="bg-outline/40 outline outline-outline text-accent px-1 py-0.5 rounded text-sm font-mono"
+                        {...props}
+                      >
+                        {children}
+                      </code>
+                    );
+                  },
                 }}
               />
             </div>
           </div>
         ))}
+        <div className="h-8" />
         {/* Status Indicators */}
-        {isUploading && (
-          <div className="text-center text-sm text-gray-500 py-2">
-            {" "}
-            Uploading file...{" "}
-          </div>
-        )}
         {uploadError && (
           <div className="text-center text-sm text-red-500 p-2 border border-red-300 bg-red-50 rounded">
-            {" "}
             Upload Error: {uploadError}{" "}
-          </div>
-        )}
-        {isAiLoading && (
-          <div className="text-center text-sm text-gray-500 py-2">
-            {" "}
-            Cordial is thinking...{" "}
           </div>
         )}
         {aiError && (
@@ -255,112 +265,95 @@ export function ChatInterface({
         )}
       </div>
 
-      {/* Staged Files Display Area */}
-      {stagedFiles.length > 0 && (
-        <div className="px-4 pb-2 border-t border-b border-gray-200 dark:border-gray-700">
-          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 pt-2 pb-1">
-            Attached files:
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {stagedFiles.map((file) => (
-              <div
-                key={file.path}
-                className="flex items-center gap-1 bg-gray-100 dark:bg-gray-700 rounded-full px-2 py-1 text-sm"
-              >
-                <span
-                  className="text-gray-700 dark:text-gray-200 truncate max-w-[150px]"
-                  title={file.name}
-                >
-                  {file.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveStagedFile(file.path)}
-                  className="text-gray-500 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 focus:outline-none disabled:opacity-50"
-                  title="Remove file"
-                  disabled={isUploading || isAiLoading}
-                >
-                  {/* Simple X icon */}
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    className="h-4 w-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M6 18L18 6M6 6l12 12"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       {/* Input form area */}
       <form
         onSubmit={handleFormSubmit} // Use the custom handler
-        className="flex items-center gap-2 p-4 border-t bg-white dark:bg-gray-800"
+        className="flex gap-2 mb-2 w-[62%]"
       >
-        {/* Hidden File Input */}
-        <input
-          type="file"
-          ref={fileInputRef}
-          onChange={handleFileChange}
-          className="hidden"
-          disabled={isUploading || isAiLoading}
-        />
-
-        {/* Visible Upload Button */}
-        <button
-          type="button"
-          onClick={handleUploadClick}
-          disabled={isUploading || isAiLoading}
-          className="p-2 text-gray-500 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50"
-          title="Attach file"
-        >
-          {/* Paperclip Icon */}
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            className="h-5 w-5"
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M8 4a3 3 0 00-3 3v4a5 5 0 0010 0V7a1 1 0 112 0v4a7 7 0 11-14 0V7a5 5 0 0110 0v4a3 3 0 11-6 0V7a1 1 0 011-1z"
-              clipRule="evenodd"
+        <div className="flex flex-col w-full gap-2 p-2 bg-outline/40 border border-outline rounded">
+          {/* Text Input Area */}
+          {stagedFiles.length > 0 && (
+            <div className="w-full px-2">
+              <div className="flex flex-wrap gap-2">
+                {stagedFiles.map((file) => (
+                  <div
+                    key={file.path}
+                    className="flex items-center gap-1 bg-outline rounded-full px-4 py-1"
+                  >
+                    <span
+                      className="text-gray-700 dark:text-gray-200 truncate max-w-[150px]"
+                      title={file.name}
+                    >
+                      {file.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveStagedFile(file.path)}
+                      className="text-foreground/50 hover:text-red-600 dark:hover:text-red-400 focus:outline-none disabled:opacity-50"
+                      title="Remove file"
+                      disabled={isUploading || isAiLoading}
+                    >
+                      {/* Simple X icon */}
+                      <XIcon width={16} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="flex gap-2 items-end">
+            <textarea
+              className="flex-grow px-3 py-2 min-h-20 focus:outline-none resize-none"
+              value={input}
+              placeholder="Ask anything"
+              onChange={handleInputChange}
+              disabled={isUploading || isAiLoading}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (input.trim() || stagedFiles.length > 0) {
+                    handleFormSubmit(
+                      e as unknown as FormEvent<HTMLFormElement>
+                    );
+                  }
+                }
+              }}
             />
-          </svg>
-        </button>
 
-        {/* Text Input Area */}
-        <input
-          className="flex-grow px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50"
-          value={input}
-          placeholder="Ask something..."
-          onChange={handleInputChange}
-          disabled={isUploading || isAiLoading}
-        />
+            {/* Hidden File Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              className="hidden"
+              disabled={isUploading || isAiLoading}
+            />
 
-        {/* Send Button */}
-        <button
-          type="submit"
-          className="px-4 py-2 bg-indigo-600 text-white rounded-md font-medium hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-          // Disable if busy OR if there's no text AND no files staged
-          disabled={
-            isUploading ||
-            isAiLoading ||
-            (!input.trim() && stagedFiles.length === 0)
-          }
-        >
-          Send
-        </button>
+            {/* Visible Upload Button */}
+            <button
+              type="button"
+              onClick={handleUploadClick}
+              disabled={isUploading || isAiLoading}
+              className="p-2 hover:bg-outline/50 text-foreground/50 rounded-md focus:outline-none focus:ring-2 focus:ring-accent disabled:opacity-50"
+              title="Attach file"
+            >
+              <PlusIcon strokeWidth={1.5} />
+            </button>
+
+            <button
+              type="submit"
+              className="flex p-2 rounded-lg bg-accent hover:bg-accent/70 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-accent disabled:opacity-50 justify-center items-center"
+              // Disable if busy OR if there's no text AND no files staged
+              disabled={
+                isUploading ||
+                isAiLoading ||
+                (!input.trim() && stagedFiles.length === 0)
+              }
+            >
+              <ArrowUpIcon />
+            </button>
+          </div>
+        </div>
       </form>
     </div>
   );
