@@ -164,6 +164,7 @@ export interface ProjectFile {
   _id: ObjectId;
   projectId: ObjectId; // Link to project
   taskId?: ObjectId | null; // **Link to the specific task (inferred by AI)**
+  conversationId?: ObjectId;
   uploaderId: ObjectId; // Link to user who uploaded
 
   storageProvider: "gcs";
