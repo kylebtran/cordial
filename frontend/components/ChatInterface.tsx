@@ -1,16 +1,15 @@
+// components/ChatInterface.tsx
 "use client";
 
 import { useChat, type Message } from "ai/react";
 import { useState } from "react";
-import type { ChatMessage } from "@/lib/data/types";
+import type { SerializedChatMessage } from "@/lib/data/types";
 
 // Map initial messages fetched from DB to the format useChat expects (if needed)
 // Ensure they have string IDs for React keys
-const mapInitialMessages = (messages: ChatMessage[]): Message[] => {
+const mapInitialMessages = (messages: SerializedChatMessage[]): Message[] => {
   return messages.map((msg) => ({
-    ...msg,
-    id: msg.id || msg._id?.toString() || `db-${Math.random()}`, // Ensure string ID
-    // Ensure role and content are present
+    id: msg.id || msg._id || `db-${Math.random()}`,
     role: msg.role,
     content: msg.content,
   }));
@@ -19,7 +18,7 @@ const mapInitialMessages = (messages: ChatMessage[]): Message[] => {
 interface ChatInterfaceProps {
   conversationId: string;
   projectId: string;
-  initialMessages: ChatMessage[]; // Messages fetched server-side
+  initialMessages: SerializedChatMessage[];
 }
 
 export function ChatInterface({

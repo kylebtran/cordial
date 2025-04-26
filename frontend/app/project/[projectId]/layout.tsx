@@ -3,7 +3,12 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { getProjectDetails } from "@/lib/data/projects"; // Fetches project AND role
 import { getConversationsForUserInProject } from "@/lib/data/conversations"; // Fetches user's convos in this project
-import type { Project, Conversation, Role } from "@/lib/data/types";
+import type {
+  Project,
+  Conversation,
+  Role,
+  SidebarConversationInfo,
+} from "@/lib/data/types";
 import { ChatSidebar } from "@/components/ChatSidebar"; // The client component sidebar
 
 interface ProjectLayoutProps {
@@ -44,12 +49,20 @@ export default async function ProjectLayout({
     project._id
   );
 
+  const sidebarConversations: SidebarConversationInfo[] = conversations.map(
+    (convo) => ({
+      _id: convo._id.toString(),
+      title: convo.title,
+      createdAt: convo.createdAt.toISOString(),
+    })
+  );
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Sidebar Component */}
       <ChatSidebar
         projectId={projectId} // Pass projectId for link generation/new chat action
-        initialConversations={conversations} // Pass conversations to populate the sidebar
+        initialConversations={sidebarConversations} // Pass conversations to populate the sidebar
         projectName={project.name} // Pass project name for display
         userRole={userRole} // Pass role for potential display/logic
       />

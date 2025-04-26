@@ -3,12 +3,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation"; // To identify the active chat
-import type { Conversation, Role } from "@/lib/data/types";
+import type { Role, SidebarConversationInfo } from "@/lib/data/types";
 import { CreateNewChatButton } from "@/components/CreateNewChatButton"; // Button using Server Action
 
 interface ChatSidebarProps {
   projectId: string;
-  initialConversations: Conversation[];
+  initialConversations: SidebarConversationInfo[];
   projectName: string;
   userRole: Role;
 }
@@ -53,7 +53,9 @@ export function ChatSidebar({
                     }`}
                     title={
                       convo.title ||
-                      `Chat from ${convo.createdAt.toLocaleDateString()}`
+                      `Chat from ${new Date(
+                        convo.createdAt
+                      ).toLocaleDateString()}`
                     }
                   >
                     {convo.title || `Chat...`}{" "}

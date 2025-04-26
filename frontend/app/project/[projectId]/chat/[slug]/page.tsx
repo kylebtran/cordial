@@ -2,8 +2,13 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
-import { getConversationIfOwner } from "@/lib/data/conversations"; // Adjust path if needed
-import type { Conversation, Project, Role } from "@/lib/data/types"; // Adjust path if needed
+import { getConversationIfOwner } from "@/lib/data/conversations";
+import type {
+  Conversation,
+  Project,
+  Role,
+  SerializedChatMessage,
+} from "@/lib/data/types";
 import { getProjectDetails } from "@/lib/data/projects";
 import { ChatInterface } from "@/components/ChatInterface";
 
@@ -51,12 +56,33 @@ export default async function ChatPage({ params }: PageProps) {
     notFound();
   }
 
+  const initialSerializedChatMessages: SerializedChatMessage[] =
+    conversation.messages.map((msg) => {
+      const serializableMsg: SerializedChatMessage = {
+        role: msg.role,
+        content: msg.content,
+        // Include 'id' (string) if it exists (common for assistant messages)
+        id: msg.id,
+        // Include 'parts' if it exists and assuming it's serializable
+        parts: msg.parts,
+        // --- Convert complex types ---
+        // Convert MongoDB ObjectId to string (handle optionality)
+        _id: msg._id?.toString(),
+        // Convert JavaScript Date to ISO string (handle optionality)
+        createdAt: msg.createdAt?.toISOString(),
+        // Add any other fields from ChatMessage that are needed and serializable
+      };
+      return serializableMsg;
+    });
+
   return (
     <div className="container mx-auto p-4 flex flex-col h-screen">
       <header className="mb-4 pb-4 border-b">
         <h1 className="text-2xl font-bold">
           {conversation.title ||
-            `Chat from ${conversation.createdAt.toLocaleDateString()}`}
+            `Chat from ${new Date(
+              conversation.createdAt
+            ).toLocaleDateString()}`}
         </h1>
         {/* Link back to the specific project's overview page */}
         <Link
@@ -72,7 +98,7 @@ export default async function ChatPage({ params }: PageProps) {
         <ChatInterface
           conversationId={conversationId}
           projectId={projectId}
-          initialMessages={conversation.messages}
+          initialMessages={initialSerializedChatMessages}
         />
       </main>
     </div>
