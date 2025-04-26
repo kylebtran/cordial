@@ -13,7 +13,6 @@ export interface Project {
   _id: ObjectId;
   name: string;
   description?: string | null;
-  ownerId: ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -114,9 +114,6 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
       <div className="bg-white p-4 rounded shadow">
         <h2 className="text-lg font-semibold mb-2">Project Details</h2>
         <p>
-          <strong>Owner ID:</strong> {project.ownerId.toString()}
-        </p>
-        <p>
           <strong>Your Role:</strong> {userRole}
         </p>
         <p>

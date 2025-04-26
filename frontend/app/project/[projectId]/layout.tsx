@@ -11,6 +11,7 @@ import type {
 } from "@/lib/data/types";
 import { ChatSidebar } from "@/components/ChatSidebar"; // The client component sidebar
 import { Sidebar } from "@/components/Sidebar";
+import { getProjectsForUser, UserProjectInfo } from "@/server/actions/projects";
 
 interface ProjectLayoutProps {
   params: {
@@ -34,6 +35,7 @@ export default async function ProjectLayout({
     // For now, let's assume redirection targets the overview for simplicity if caught here.
     redirect(`/login?callbackUrl=/project/${projectId}/overview`);
   }
+  const userId = session.user.id;
 
   const projectResult = await getProjectDetails(projectId);
   if (!projectResult) {
@@ -46,6 +48,15 @@ export default async function ProjectLayout({
 
   // --- Fetch Data for the Layout (Sidebar) ---
   // Get the list of conversations for the sidebar navigation
+  const userProjects: UserProjectInfo[] = await getProjectsForUser(userId);
+  const projectsForSidebar = userProjects.map((p) => ({
+    id: p._id.toString(),
+    name: p.name,
+  }));
+  const currentProjectForSidebar = {
+    id: project._id.toString(),
+    name: project.name,
+  };
   const conversations: Conversation[] = await getConversationsForUserInProject(
     project._id
   );
@@ -61,10 +72,11 @@ export default async function ProjectLayout({
   return (
     <div className="flex h-screen overflow-hidden font-sans">
       <Sidebar
-        projectId={projectId}
+        projectId={currentProjectForSidebar.id}
         projectName={project.name}
         userName={session.user.name || "Guest"}
         userRole={userRole}
+        userProjects={projectsForSidebar}
       />
       {/* Sidebar Component */}
       <ChatSidebar
