@@ -50,13 +50,6 @@ export function ChatInterface({
   } = useChat({
     api: "/api/chat",
     initialMessages: mapInitialMessages(initialMessages),
-    body: {
-      // Static data sent with every request
-      data: {
-        conversationId: conversationId,
-        projectId: projectId,
-      },
-    },
     onError: (err) => {
       console.error("AI Chat error:", err);
     },
@@ -155,21 +148,36 @@ export function ChatInterface({
 
     // Data specific to this message, including staged files
     const messageData = {
-      stagedFilesData: filesPayload, // Send the explicitly mapped array
+      conversationId: conversationId,
+      projectId: projectId,
+      stagedFilesData: filesPayload,
     };
 
-    // Call the original handleSubmit from useChat, passing the event and message-specific data
-    originalHandleSubmit(e, {
-      // The 'data' field expects simple JSON values or objects/arrays composed of them.
-      // Ensure messageData fits this structure.
-      data: messageData as any, // Use type assertion as a workaround if TS still complains
-      // This tells TS "Trust me, this object IS serializable"
-      // It's generally safe here as we constructed it with serializable types.
-    });
+    console.log("ChatInterface: handleFormSubmit triggered.");
+    console.log("ChatInterface: Current input value:", input);
+    console.log(
+      "ChatInterface: Current stagedFiles state:",
+      JSON.stringify(stagedFiles, null, 2)
+    );
+    console.log(
+      "ChatInterface: Prepared messageData for handleSubmit:",
+      JSON.stringify(messageData, null, 2)
+    );
+
+    try {
+      originalHandleSubmit(e, { data: messageData as any });
+      console.log("ChatInterface: originalHandleSubmit called successfully.");
+    } catch (submitError) {
+      console.error(
+        "ChatInterface: Error calling originalHandleSubmit:",
+        submitError
+      );
+    }
 
     // Clear the text input and staged files *after* submitting
     setInput("");
     setStagedFiles([]);
+    console.log("ChatInterface: Input and stagedFiles cleared.");
   };
 
   return (

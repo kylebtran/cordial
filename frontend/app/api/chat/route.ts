@@ -8,6 +8,14 @@ import { streamGeminiText } from "@/lib/ai/gemini";
 import { getActiveAssignedTasksForUser } from "@/lib/data/tasks";
 import { getUserRoleInProject } from "@/lib/data/memberships";
 
+interface StagedFile {
+  name: string;
+  path: string;
+  url: string | null;
+  contentType: string;
+  size: number;
+}
+
 export async function POST(req: Request) {
   try {
     const session = await auth();
@@ -22,11 +30,20 @@ export async function POST(req: Request) {
       data,
     }: {
       messages: Message[];
-      data?: { conversationId?: string; projectId?: string };
+      data?: {
+        conversationId?: string;
+        projectId?: string;
+        stagedFilesData?: StagedFile[];
+      };
     } = await req.json();
+
+    console.log("Received request data object:", JSON.stringify(data, null, 2));
 
     const conversationId = data?.conversationId;
     const projectId = data?.projectId;
+    const stagedFiles = data?.stagedFilesData ?? [];
+
+    console.log(`Parsed stagedFiles count: ${stagedFiles.length}`);
 
     if (!conversationId) {
       return new Response("Missing conversationId", { status: 400 });
@@ -51,6 +68,32 @@ export async function POST(req: Request) {
       );
     }
 
+    // --- *** FILE HANDLING START *** ---
+
+    if (stagedFiles.length > 0) {
+      console.log(
+        `Received ${stagedFiles.length} staged file(s) for conversation ${conversationId}:`
+      );
+      stagedFiles.forEach((file, index) => {
+        console.log(
+          `  [${index + 1}] Name: ${file.name}, Path: ${file.path}, Type: ${
+            file.contentType
+          }, Size: ${file.size}`
+        );
+        // TODO: Phase 4/5 - For each file:
+        // 1.  Determine relevant Task ID (AI call or user input needed).
+        //     - Example AI call needed here: `const taskId = await inferTaskIdForFile(file.name, messages, activeTasks);`
+        // 2.  (Optional) Call AI to determine usefulness/generate summary.
+        //     - Example: `const aiMeta = await getAiFileMetadata(file.path, file.contentType);`
+        // 3.  Create `projectFiles` record in MongoDB, linking file.path, taskId, projectId, uploaderId, etc.
+        //     - Example: `const dbFileRecord = await createProjectFileRecord({ ..., taskId: taskId, ... });`
+        // 4.  Trigger background RAG job, passing the MongoDB `projectFiles` record ID or necessary info.
+        //     - Example: `triggerRagProcessing(dbFileRecord._id);`
+        // 5.  (Optional) If file deemed "useful", trigger notification (separate from task completion).
+      });
+    }
+    // --- End Processing Staged Files ---
+
     // --- *** CONTEXT INJECTION START *** ---
 
     console.log(`Fetching context for user ${userId} in project ${projectId}`);
@@ -68,9 +111,16 @@ export async function POST(req: Request) {
         : "No active tasks currently assigned.";
 
     // Construct the context message content
-    const contextMessageContent = `CONTEXT: You are speaking with ${userName} (Role: ${
-      userRole || "Member" // Default to 'Member' if role not found
-    }). Their currently active assigned tasks for this project are:\n${activeTasksSummary}\n---`;
+    let contextMessageContent = `CONTEXT: You are speaking with ${userName} (Role: ${
+      userRole || "Member"
+    }). Their currently active assigned tasks for this project are:\n${activeTasksSummary}`;
+    if (stagedFiles.length > 0) {
+      const fileNames = stagedFiles.map((f) => `'${f.name}'`).join(", ");
+      contextMessageContent += `\n\nThe user has just attached the following file(s): ${fileNames}. Process the user's message considering these attachments.`;
+    }
+    contextMessageContent += "\n---";
+
+    console.log(`Context message content: ${contextMessageContent}`);
 
     // Create the context message object (using 'system' role is often effective)
     const contextMessage: Message = {
@@ -88,18 +138,6 @@ export async function POST(req: Request) {
     );
 
     // --- *** CONTEXT INJECTION END *** ---
-
-    // --- Placeholder for File Reference Parsing (Phase 3) ---
-    const fileRegex = /\[file:\s*(.*?)\].*$/; // Simple regex to find [file: URL]
-    const fileMatch = lastUserMessage.content.match(fileRegex);
-    if (fileMatch && fileMatch[1]) {
-      const blobUrl = fileMatch[1];
-      console.log(`Detected file reference in user message: ${blobUrl}`);
-      // TODO: Add logic here later to use the blobUrl, potentially trigger
-      // the AI call for task linking/usefulness check, create projectFiles record,
-      // and trigger the RAG background job.
-    }
-    // --- End Placeholder ---
 
     // Save user message (non-blocking)
     // Cast Message to ChatMessage - ensure compatibility or adjust types
