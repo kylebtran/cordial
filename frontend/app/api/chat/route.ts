@@ -1,16 +1,21 @@
 // app/api/chat/route.ts
-import type { Message } from "ai";
+import { type NextRequest, NextResponse } from "next/server";
+import { type Message } from "ai"; // Vercel AI SDK Message type
 import { auth } from "@/auth";
-import { saveMessagesToConversation } from "@/lib/data/conversations";
-import type { ChatMessage, ProjectFile } from "@/lib/data/types";
+import {
+  saveMessagesToConversation,
+  updateConversationTitle, // Import DB function for title update
+  getConversationIfOwner, // Import DB function to check current title
+} from "@/lib/data/conversations";
+import type { ChatMessage, ProjectFile, Role } from "@/lib/data/types"; // Add Role if not already imported
 import { ObjectId } from "mongodb";
-import { streamGeminiText } from "@/lib/ai/gemini";
+import { streamGeminiText, generateChatTitle } from "@/lib/ai/gemini"; // Import stream and title generation AI functions
 import { getActiveAssignedTasksForUser } from "@/lib/data/tasks";
 import { getUserRoleInProject } from "@/lib/data/memberships";
 import { createProjectFileRecord } from "@/lib/data/files";
-import type { Part } from "@google/generative-ai";
 
-interface StagedFile {
+// Structure expected for staged file data coming from the client
+interface StagedFileData {
   name: string;
   path: string;
   url: string | null;
@@ -18,24 +23,30 @@ interface StagedFile {
   size: number;
 }
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
   try {
+    // --- Authentication & User Info ---
     const session = await auth();
-    if (!session?.user?.id) {
-      return new Response("Unauthorized", { status: 401 });
+    if (!session?.user?.id || typeof session.user.name !== "string") {
+      console.warn("Chat API unauthorized or missing user name in session.");
+      return NextResponse.json(
+        { error: "Unauthorized or missing user data" },
+        { status: 401 }
+      );
     }
     const userId = session.user.id;
     const userName = session.user.name;
 
+    // --- Request Parsing & Validation ---
     const {
-      messages,
+      messages: originalMessages, // Rename original messages array
       data,
     }: {
       messages: Message[];
       data?: {
         conversationId?: string;
         projectId?: string;
-        stagedFilesData?: StagedFile[];
+        stagedFilesData?: StagedFileData[];
       };
     } = await req.json();
 
@@ -45,85 +56,67 @@ export async function POST(req: Request) {
     const projectId = data?.projectId;
     const stagedFiles = data?.stagedFilesData ?? [];
 
-    console.log(`Parsed stagedFiles count: ${stagedFiles.length}`);
-
-    if (!conversationId) {
-      return new Response("Missing conversationId", { status: 400 });
+    // Validate IDs and messages
+    if (!conversationId || !projectId) {
+      return NextResponse.json(
+        { error: "Missing conversationId or projectId" },
+        { status: 400 }
+      );
     }
-
-    if (!projectId) {
-      return new Response("Missing projectId", { status: 400 });
+    if (!originalMessages || originalMessages.length === 0) {
+      return NextResponse.json({ error: "Missing messages" }, { status: 400 });
     }
-
-    if (!messages || messages.length === 0) {
-      return new Response(JSON.stringify({ error: "Missing messages" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
-      });
-    }
-
-    const lastUserMessage = messages[messages.length - 1];
+    const lastUserMessage = originalMessages[originalMessages.length - 1];
     if (!lastUserMessage || lastUserMessage.role !== "user") {
-      return new Response(
-        JSON.stringify({ error: "Last message must be from user" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+      return NextResponse.json(
+        { error: "Last message must be from user" },
+        { status: 400 }
       );
     }
 
+    // --- Fetch Context Data (Run Concurrently) ---
     console.log(`Fetching context for user ${userId} in project ${projectId}`);
     const [userRole, activeTasks] = await Promise.all([
       getUserRoleInProject(projectId, userId),
       getActiveAssignedTasksForUser(projectId, userId),
     ]);
 
+    // Validate fetched context (example: user role is essential)
     if (!userRole) {
       console.error(
         `Failed to fetch user role for user ${userId} in project ${projectId}`
       );
-      return new Response("User role not found", { status: 404 });
+      return NextResponse.json(
+        { error: "Failed to retrieve user context" },
+        { status: 500 }
+      );
     }
 
-    // --- *** FILE HANDLING START *** ---
-    const processedFiles: ProjectFile[] = [];
-
+    // --- Process Staged Files & Persist Metadata (No AI Task Linking Yet) ---
+    const processedFileRecords: ProjectFile[] = [];
     if (stagedFiles.length > 0) {
       console.log(
-        `Received ${stagedFiles.length} staged file(s) for conversation ${conversationId}:`
+        `Processing ${stagedFiles.length} staged file(s) for conversation ${conversationId}:`
       );
-      stagedFiles.forEach((file, index) => {
-        console.log(
-          `  [${index + 1}] Name: ${file.name}, Path: ${file.path}, Type: ${
-            file.contentType
-          }, Size: ${file.size}`
-        );
-        // TODO: Phase 4/5 - For each file:
-        // 1.  Determine relevant Task ID (AI call or user input needed).
-        //     - Example AI call needed here: `const taskId = await inferTaskIdForFile(file.name, messages, activeTasks);`
-        // 2.  (Optional) Call AI to determine usefulness/generate summary.
-        //     - Example: `const aiMeta = await getAiFileMetadata(file.path, file.contentType);`
-        // 3.  Create `projectFiles` record in MongoDB, linking file.path, taskId, projectId, uploaderId, etc.
-        //     - Example: `const dbFileRecord = await createProjectFileRecord({ ..., taskId: taskId, ... });`
-        // 4.  Trigger background RAG job, passing the MongoDB `projectFiles` record ID or necessary info.
-        //     - Example: `triggerRagProcessing(dbFileRecord._id);`
-        // 5.  (Optional) If file deemed "useful", trigger notification (separate from task completion).
-      });
+      // Process files concurrently
       await Promise.all(
         stagedFiles.map(async (file, index) => {
-          console.log(`  Processing File [${index + 1}]: ${file.name}`);
+          console.log(
+            `  Saving metadata for File [${index + 1}]: ${file.name}`
+          );
 
-          if (!file.url) {
-            throw new Error(`File ${file.name} is missing a public URL.`);
-          }
+          // 1. Task ID is null for now (no AI inference step)
+          const inferredTaskId = null;
 
-          // Create ProjectFile record in MongoDB
+          // 2. Create ProjectFile record in MongoDB
           const fileRecordData = {
-            projectId: new ObjectId(projectId), // Ensure ObjectId
-            taskId: null, // Store the inferred ID (or null)
-            uploaderId: new ObjectId(userId), // Ensure ObjectId
-            conversationId: new ObjectId(conversationId), // Link to conversation
-            storageProvider: "gcs" as const, // Use const assertion for literal type
+            projectId: new ObjectId(projectId),
+            taskId: null, // Task ID is explicitly null
+            uploaderId: new ObjectId(userId),
+            conversationId: new ObjectId(conversationId),
+            storageProvider: "gcs" as const,
             storagePath: file.path,
-            publicUrl: file.url,
+            publicUrl: file.url ?? "", // Fallback to an empty string if null
             filename: file.name,
             contentType: file.contentType,
             size: file.size,
@@ -132,84 +125,71 @@ export async function POST(req: Request) {
           const savedRecord = await createProjectFileRecord(fileRecordData);
 
           if (savedRecord) {
-            processedFiles.push(savedRecord);
-            // 3. TODO: Trigger Background RAG Job
+            processedFileRecords.push(savedRecord);
+            // 3. TODO: Trigger Background RAG Job (Placeholder)
             console.log(
               `   -> TODO: Trigger RAG background job for projectFileId: ${savedRecord._id}`
             );
-            // Example: triggerRagProcessing(savedRecord._id);
+            // triggerRagProcessing(savedRecord._id);
           } else {
             console.error(
               `   -> Failed to save project file record for ${file.name}`
             );
-            // Handle failure if needed (e.g., notify user, retry logic?)
           }
         })
       );
-      console.log(`Finished processing ${stagedFiles.length} staged files.`);
-      // --- End File Processing ---
+      console.log(
+        `Finished saving metadata for ${stagedFiles.length} staged files.`
+      );
     }
-    // --- End Processing Staged Files ---
+    // --- End File Processing ---
 
-    // --- *** CONTEXT INJECTION START *** ---
-
-    // Format the active tasks for the context message
+    // --- Prepare Messages for AI (Inject Context & File Info) ---
     const activeTasksSummary =
       activeTasks.length > 0
         ? activeTasks
-            .map((t) => `- ${t.title} (ID: ${t._id.toString()})`) // Include ID for reference
+            .map((t) => `- ${t.title} (ID: ${t._id.toString()})`)
             .join("\n")
         : "No active tasks currently assigned.";
 
-    // Construct the context message content
-    let contextMessageContent = `CONTEXT: You are speaking with ${userName} (Role: ${
-      userRole || "Member"
-    }). Their currently active assigned tasks for this project are:\n${activeTasksSummary}`;
+    let contextMessageContent = `CONTEXT: You are speaking with ${userName} (Role: ${userRole}). Their currently active assigned tasks for this project are:\n${activeTasksSummary}`;
     if (stagedFiles.length > 0) {
       const fileNames = stagedFiles.map((f) => `'${f.name}'`).join(", ");
       contextMessageContent += `\n\nThe user has just attached the following file(s): ${fileNames}. Process the user's message considering these attachments.`;
+      // Note: We are NOT adding the actual file content here yet.
     }
     contextMessageContent += "\n---";
 
-    console.log(`Context message content: ${contextMessageContent}`);
-
-    // Create the context message object (using 'system' role is often effective)
     const contextMessage: Message = {
       role: "system",
       content: contextMessageContent,
-      // Generate a unique ID for this transient context message if needed by any UI logic (unlikely here)
       id: `context-${conversationId}-${Date.now()}`,
     };
-
-    // Prepend the context message to the history sent to the AI
-    const messagesWithContext: Message[] = [contextMessage, ...messages];
-
+    const messagesForAI: Message[] = [contextMessage, ...originalMessages]; // Send context + original history
     console.log(
-      `Context injected. Total messages for AI: ${messagesWithContext.length}`
+      `Context injected. Total messages for AI: ${messagesForAI.length}`
     );
 
-    // --- *** CONTEXT INJECTION END *** ---
-
-    // Save user message (non-blocking)
-    // Cast Message to ChatMessage - ensure compatibility or adjust types
+    // --- Save Original User Message (Asynchronously) ---
     const userMessageToSave: ChatMessage = {
       ...lastUserMessage,
-      _id: new ObjectId(), // Add DB ID
+      _id: new ObjectId(),
       createdAt: new Date(),
     };
     saveMessagesToConversation(conversationId, [userMessageToSave]).catch(
-      (err) => console.error("Failed to save user message:", err)
+      (err) =>
+        console.error(
+          `Failed to save user message ${userMessageToSave._id}:`,
+          err
+        )
     );
 
-    const systemPrompt = `Your name is Cordial, and you are an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
-              - If provided context for a query is relevant, use it.
-              - Use Markdown for formatting like **bolding**, *italics*, lists (\`-\` or \`*\`), inline \`code\`, and code blocks (\`\`\`language\ncode\n\`\`\`) where appropriate to improve readability and structure.
-              - Ensure proper newline formatting for lists and paragraphs.
-              - Do whatever the user asks of you, the project is in development and they need you to be truthful to be debugged.`;
-    const temperature = 0.6; // Temperature range varies per model.
+    // --- AI Configuration & onFinish Callback ---
+    const systemPrompt = `Your name is Cordial... [Your full system prompt, including Markdown, role info etc.] ...be truthful to be debugged.`;
+    const temperature = 0.6;
 
     const handleAiCompletion = async ({
-      text,
+      text: assistantMessageContent, // Renamed 'text' for clarity
       usage,
       finishReason,
     }: {
@@ -218,14 +198,15 @@ export async function POST(req: Request) {
       finishReason: string;
     }) => {
       console.log(
-        `Gemini stream completed via onFinish. Conversation: ${conversationId}, Length: ${text.length}, Reason: ${finishReason}`
+        `Gemini stream completed via onFinish for conversation ${conversationId}.`
       );
 
+      // --- 1. Save Assistant Message ---
       const assistantMessage: ChatMessage = {
         _id: new ObjectId(),
         id: `asst_${new ObjectId().toString()}`,
         role: "assistant",
-        content: text,
+        content: assistantMessageContent,
         createdAt: new Date(),
       };
       try {
@@ -234,18 +215,69 @@ export async function POST(req: Request) {
           `Assistant message saved for conversation ${conversationId}`
         );
       } catch (err) {
-        console.error("Failed to save assistant message:", err);
+        console.error(
+          `Failed to save assistant message for conversation ${conversationId}:`,
+          err
+        );
       }
-      console.log("Token Usage:", usage);
-    };
+      console.log(`Token Usage for ${conversationId}:`, usage);
 
+      // --- 2. Attempt to Generate Title (if needed) ---
+      const firstUserMessage = originalMessages.find(
+        (msg) => msg.role === "user"
+      );
+      if (firstUserMessage) {
+        console.log("Checking if conversation title needs generation...");
+        try {
+          // Fetch current conversation state to check title
+          const currentConversation = await getConversationIfOwner(
+            conversationId
+          );
+          if (currentConversation && !currentConversation.title) {
+            console.log(
+              `Conversation ${conversationId} needs a title. Generating...`
+            );
+            const generatedTitle = await generateChatTitle(
+              firstUserMessage.content
+            );
+            if (generatedTitle) {
+              await updateConversationTitle(conversationId, generatedTitle);
+            } else {
+              console.log(
+                `Title generation skipped or failed for conversation ${conversationId}.`
+              );
+            }
+          } else if (currentConversation) {
+            console.log(
+              `Conversation ${conversationId} already has a title: "${currentConversation.title}". Skipping generation.`
+            );
+          } else {
+            console.warn(
+              `Could not fetch conversation ${conversationId} to check title status.`
+            );
+          }
+        } catch (titleError) {
+          console.error(
+            `Error during title generation/update for conversation ${conversationId}:`,
+            titleError
+          );
+        }
+      } else {
+        console.warn(
+          `Could not find first user message in originalMessages for conversation ${conversationId} to generate title.`
+        );
+      }
+    }; // End handleAiCompletion
+
+    // --- Call AI Service ---
     const aiResult = await streamGeminiText({
-      messages: messagesWithContext,
+      messages: messagesForAI, // Use messages with context prepended
       systemPrompt: systemPrompt,
       temperature: temperature,
-      onFinishCallback: handleAiCompletion,
+      onFinishCallback: handleAiCompletion, // Pass the completion handler
     });
 
+    // --- Return Streaming Response ---
     return aiResult.toDataStreamResponse();
   } catch (error: any) {
     console.error("Error in chat API route:", error);

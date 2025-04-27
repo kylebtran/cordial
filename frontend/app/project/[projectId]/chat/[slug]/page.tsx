@@ -20,7 +20,7 @@ interface PageProps {
 }
 
 export default async function ChatPage({ params }: PageProps) {
-  const { projectId, slug: conversationId } = params;
+  const { projectId, slug: conversationId } = await params;
 
   const session = await auth();
   if (!session?.user?.id) {

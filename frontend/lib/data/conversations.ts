@@ -215,3 +215,66 @@ export async function saveMessagesToConversation(
 
 // Add functions for creating conversations, adding messages, etc. as Server Actions later
 // e.g., createConversation(projectId: string, title?: string): Promise<Conversation | null>
+
+/**
+ * Updates the title of a specific conversation.
+ *
+ * @param conversationId The ID of the conversation to update.
+ * @param newTitle The new title string.
+ * @returns Boolean indicating if the update was acknowledged by the database.
+ */
+export async function updateConversationTitle(
+  conversationId: string | ObjectId,
+  newTitle: string
+): Promise<boolean> {
+  // Basic validation
+  if (!newTitle || newTitle.trim().length === 0) {
+    console.warn(
+      "Attempted to update conversation title with empty string. Skipping."
+    );
+    return false;
+  }
+
+  try {
+    const client = await clientPromise;
+    const db = client.db(); // Use your DB name logic
+    const conversationsCollection =
+      db.collection<Conversation>("conversations");
+
+    const convoIdObject = new ObjectId(conversationId);
+
+    console.log(
+      `Updating title for conversation ${convoIdObject} to "${newTitle}"`
+    );
+
+    const result = await conversationsCollection.updateOne(
+      { _id: convoIdObject },
+      {
+        $set: {
+          title: newTitle.trim(), // Ensure trimmed title is saved
+          updatedAt: new Date(), // Update timestamp
+        },
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      console.warn(`Update title: Conversation ${convoIdObject} not found.`);
+      return false;
+    }
+    if (result.modifiedCount === 0) {
+      console.warn(
+        `Update title: Conversation ${convoIdObject} found, but title was not modified (maybe it was already set?).`
+      );
+      // Consider this success or failure based on requirements, true seems reasonable
+      return true;
+    }
+
+    console.log(
+      `Successfully updated title for conversation ${convoIdObject}.`
+    );
+    return true;
+  } catch (error) {
+    console.error("Error updating conversation title:", error);
+    return false;
+  }
+}
