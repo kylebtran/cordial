@@ -68,6 +68,12 @@ export async function createNewProjectAction({
     newProjectId = projectInsertResult.insertedId;
     console.log(`New project created: ${newProjectId} by user ${userId}`);
 
+    await fetch("http://localhost:8000/process-manifest/", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: newProjectId }),
+    });
+
     // --- 2. Create Admin Membership ---
     // -- 3 [DEMO ONLY]. Add Demo Memberships ---
     const DEMO_MEMBERS = [

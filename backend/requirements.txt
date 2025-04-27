@@ -7,6 +7,9 @@ google-generativeai
 python-dotenv
 pydantic
 httpx
+numpy
+requests
+google-cloud-storage
 pytest
 langchain
 langchain-openai
