@@ -1,3 +1,4 @@
+// lib/hooks/media.ts
 import { useState, useEffect } from "react";
 
 export function useWebcam(): UseMediaStreamResult {

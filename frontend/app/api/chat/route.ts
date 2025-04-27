@@ -166,6 +166,48 @@ export async function POST(req: NextRequest) {
       id: `context-${conversationId}-${Date.now()}`,
     };
     const messagesForAI: Message[] = [contextMessage, ...originalMessages]; // Send context + original history
+    const ragFastApiResponse = await fetch(
+      "https://your-fastapi-server.com/rag-query",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.FASTAPI_SECRET || ""}`, // Optional
+        },
+        body: JSON.stringify({
+          query: lastUserMessage.content,
+          projectId: projectId,
+          userId: userId,
+        }),
+      }
+    );
+
+    if (!ragFastApiResponse.ok) {
+      console.error(
+        "FastAPI RAG server error:",
+        await ragFastApiResponse.text()
+      );
+    } else {
+      const ragData = await ragFastApiResponse.json();
+      console.log("Received RAG results from FastAPI:", ragData);
+
+      if (ragData.results && ragData.results.length > 0) {
+        const ragContext = ragData.results
+          .map(
+            (doc: { content: string }, idx: number) =>
+              `(${idx + 1}) ${doc.content}`
+          )
+          .join("\n\n");
+
+        const fastApiRagMessage: Message = {
+          role: "system",
+          content: `ADDITIONAL CONTEXT FROM RAG SERVER:\n${ragContext}\n---`,
+          id: `rag-fastapi-${conversationId}-${Date.now()}`,
+        };
+
+        messagesForAI.unshift(fastApiRagMessage); // Add to the beginning
+      }
+    }
     console.log(
       `Context injected. Total messages for AI: ${messagesForAI.length}`
     );
