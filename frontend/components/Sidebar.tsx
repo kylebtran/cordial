@@ -59,6 +59,7 @@ export function Sidebar({
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
+  const [newGithubUrl, setNewGithubUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -90,7 +91,10 @@ export function Sidebar({
       return;
     }
     startTransition(async () => {
-      const result = await createNewProjectAction({ name: newProjectName });
+      const result = await createNewProjectAction({
+        name: newProjectName,
+        github: newGithubUrl,
+      });
       if (result?.error) {
         setError(result.error);
       } else {
@@ -196,17 +200,24 @@ export function Sidebar({
             <form
               id="create-project-form"
               onSubmit={handleCreateProject}
-              className="grid gap-4 py-2"
+              className="grid gap-2 py-2"
             >
               <div className="flex flex-col gap-4">
-                <Label htmlFor="projectName" className="text-right">
-                  Name
-                </Label>
                 <Input
                   id="projectName"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
                   placeholder="Enter project name..."
+                  className="border-outline focus-visible:ring-1"
+                  required
+                  maxLength={100}
+                  disabled={isPending}
+                />
+                <Input
+                  id="projectName"
+                  value={newGithubUrl}
+                  onChange={(e) => setNewGithubUrl(e.target.value)}
+                  placeholder="Enter GitHub repo..."
                   className="border-outline focus-visible:ring-1"
                   required
                   maxLength={100}
@@ -230,7 +241,9 @@ export function Sidebar({
                 type="submit"
                 className="bg-outline/70 hover:bg-outline"
                 form="create-project-form" // Associate button with the form
-                disabled={isPending || !newProjectName.trim()}
+                disabled={
+                  isPending || !newProjectName.trim() || !newGithubUrl.trim()
+                }
                 // No onClick needed here, type="submit" and form attribute handle it
               >
                 {isPending ? (
