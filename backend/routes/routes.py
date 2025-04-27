@@ -13,10 +13,13 @@ from services.llm_service import generate_project_structure_from_manifest
 from services.jira_project_service import create_project_in_jira
 from services.rag_service import generate_answer_from_query
 from db.vector_ops import push_document_embedding
-from services.rag_chat import _simple_chunk, _embed, _store_chunks, vectorstore
+from services.rag_chat import _simple_chunk, _embed, _store_chunks, vectorstore, CHAT_MODEL
 import weaviate
 import google.generativeai as genai
+import textwrap
 from langchain_community.vectorstores import Weaviate as LCWeaviate
+from fastapi.responses import JSONResponse
+
 
 router = APIRouter()
 
