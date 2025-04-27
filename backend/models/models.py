@@ -38,3 +38,8 @@ class User(BaseModel):
     email: str
     skills: List[str]
 
+class RagChatRequest(BaseModel):
+    message: str
+    projectId: str
+    userId: str
+    fileUrl: Optional[str] = None  # now truly optional

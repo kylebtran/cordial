@@ -1,5 +1,5 @@
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException
-from models.models import Project, User
+from models.models import Project, User, RagChatRequest
 #from services.llm_service import generate_tasks_from_manifest
 from services.matching_service import match_tasks_to_users
 from constants import USERS
@@ -20,6 +20,11 @@ import textwrap
 from langchain_community.vectorstores import Weaviate as LCWeaviate
 from fastapi.responses import JSONResponse
 import requests
+from pydantic import BaseModel
+from typing import Optional
+import requests  # keep this too
+from fastapi import Body
+
 
 
 router = APIRouter()
@@ -226,29 +231,28 @@ async def upload_document(
 # ---------------------------------------------------------------------------
 
 @router.post("/api/rag/chat")
-async def rag_chat(
-    message: str = Form(...),
-    projectId: str = Form(...),
-    userId: str = Form(...),
-    fileUrl: str | None = Form(None),
-):
+async def rag_chat(payload: RagChatRequest = Body(...)):
+    message = payload.message
+    projectId = payload.projectId
+    userId = payload.userId
+    fileUrl = payload.fileUrl
     """Single‑shot RAG Q&A. Accepts optional file ≤1 MB, embeds & answers inline."""
 
     # ---------------------------------------------------------------------
     # 1. Optional file ingestion
     # ---------------------------------------------------------------------
-    if fileUrl is not None:
+    if fileUrl:
         try:
-            response = requests.get(fileUrl)
+            response = requests.get(fileUrl, timeout=10)
             response.raise_for_status()
             text = response.text
         except Exception as e:
-            raise HTTPException(status_code=400, detail=f"Failed to fetch file from URL: {e}")
+            raise HTTPException(status_code=400, detail=f"File download failed: {str(e)}")
 
         chunks = _simple_chunk(text)
         meta_base = {
             "project_id": projectId,
-            "filename": fileUrl.split('/')[-1],  # just take filename from URL
+            "filename": fileUrl.split('/')[-1],
             "uploader_id": userId,
         }
         await _store_chunks(chunks, meta_base)
