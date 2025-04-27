@@ -13,6 +13,10 @@ from services.llm_service import generate_project_structure_from_manifest
 from services.jira_project_service import create_project_in_jira
 from services.rag_service import generate_answer_from_query
 from db.vector_ops import push_document_embedding
+from services.rag_chat import _simple_chunk, _embed, _store_chunks, vectorstore
+import weaviate
+import google.generativeai as genai
+from langchain_community.vectorstores import Weaviate as LCWeaviate
 
 router = APIRouter()
 
@@ -213,7 +217,89 @@ async def upload_document(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to upload document: {str(e)}")
 
+# ---------------------------------------------------------------------------
+# Main synchronous chat endpoint
+# ---------------------------------------------------------------------------
 
+@router.post("/api/rag/chat")
+async def rag_chat(
+    message: str = Form(...),
+    projectId: str = Form(...),
+    userId: str = Form(...),
+    file: UploadFile | None = File(None),
+):
+    """Single‑shot RAG Q&A. Accepts optional file ≤1 MB, embeds & answers inline."""
+
+    # ---------------------------------------------------------------------
+    # 1. Optional file ingestion
+    # ---------------------------------------------------------------------
+    if file is not None:
+        if file.size is not None and file.size > 1_000_000:
+            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                detail="File exceeds 1 MB limit")
+        raw_bytes = await file.read()
+        try:
+            text = raw_bytes.decode("utf-8")
+        except UnicodeDecodeError:
+            text = raw_bytes.decode("latin-1", errors="ignore")
+
+        chunks = _simple_chunk(text)  # // TODO: replace with sentence/token splitter
+        meta_base = {
+            "project_id": projectId,
+            "filename": file.filename or "upload",
+            "uploader_id": userId,
+        }
+        await _store_chunks(chunks, meta_base)
+
+    # ---------------------------------------------------------------------
+    # 2. Similarity search (project‑scoped)
+    # ---------------------------------------------------------------------
+    filter_kw = {"path": ["project_id"], "operator": "Equal", "valueString": projectId}
+
+    query_vec = await _embed(message)    # ✅ First embed the user query
+    docs = vectorstore.similarity_search_by_vector(  # ✅ Use the correct function
+        embedding=query_vec,
+        k=5,
+        filters=filter_kw,
+    )
+
+    context_blocks = [d.page_content for d in docs]
+    citation_ids = [d.metadata.get("chunk_id") for d in docs]
+
+    if not context_blocks:
+        note = "_Note: context is limited; answer may be incomplete._\n\n"
+    else:
+        note = ""
+
+    prompt = textwrap.dedent(f"""
+        You are an intelligent project assistant. Provide clear, actionable answers. Quote filenames when useful.
+
+        {note}Context:
+        {"\n\n".join(context_blocks) if context_blocks else "<empty>"}
+
+        Question:
+        {message}
+        """)
+
+    # ---------------------------------------------------------------------
+    # 3. Gemini chat completion
+    # ---------------------------------------------------------------------
+    chat_model = genai.GenerativeModel(model_name=CHAT_MODEL)
+    try:
+        rsp = chat_model.generate_content(prompt)
+        answer_text = rsp.text if hasattr(rsp, "text") else rsp.candidates[0].content.parts[0].text  # type: ignore
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gemini error: {e}")
+
+    # ---------------------------------------------------------------------
+    # 4. Return JSON answer (synchronous)
+    # ---------------------------------------------------------------------
+    return JSONResponse(
+        {
+            "answer": answer_text.strip(),
+            "citations": citation_ids,
+        }
+    )
 
 __all__ = ["router"]
 
