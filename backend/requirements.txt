@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+google-generativeai>=0.7
+google-genai
+mcp[cli]          # installs mcp-python SDK with SSE client
+atlassian-python-api
+pymongo[srv]
+motor[srv]
+httpx
+numpy
