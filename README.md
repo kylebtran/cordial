@@ -12,6 +12,7 @@ Cordial is a web-based assistant built to help teams manage their projects more 
     *   **GitHub:** Creates new issues (bugs, features), edits existing ones (like closing or reopening), and adds collaborators based on the chat.
     *   **Jira:** Creates detailed work items (tasks, stories, epics), understands team member expertise (from project setup), and can assign tasks accordingly.
 *   **Data Storage:** Keeps project details, uploaded files, and conversation history organized in a MongoDB database.
+![image](https://github.com/user-attachments/assets/f86df20d-8529-4379-840d-d4bff25eeb66)
 
 ## How it Works - The Flow
 
