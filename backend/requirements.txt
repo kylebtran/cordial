@@ -9,3 +9,5 @@ pymongo[srv]
 motor[srv]
 httpx
 numpy
+requests
+google-cloud-storage
