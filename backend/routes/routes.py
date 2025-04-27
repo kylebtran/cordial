@@ -19,6 +19,7 @@ import google.generativeai as genai
 import textwrap
 from langchain_community.vectorstores import Weaviate as LCWeaviate
 from fastapi.responses import JSONResponse
+import requests
 
 
 router = APIRouter()
@@ -229,27 +230,25 @@ async def rag_chat(
     message: str = Form(...),
     projectId: str = Form(...),
     userId: str = Form(...),
-    file: UploadFile | None = File(None),
+    fileUrl: str | None = Form(None),
 ):
     """Single‑shot RAG Q&A. Accepts optional file ≤1 MB, embeds & answers inline."""
 
     # ---------------------------------------------------------------------
     # 1. Optional file ingestion
     # ---------------------------------------------------------------------
-    if file is not None:
-        if file.size is not None and file.size > 1_000_000:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                                detail="File exceeds 1 MB limit")
-        raw_bytes = await file.read()
+    if fileUrl is not None:
         try:
-            text = raw_bytes.decode("utf-8")
-        except UnicodeDecodeError:
-            text = raw_bytes.decode("latin-1", errors="ignore")
+            response = requests.get(fileUrl)
+            response.raise_for_status()
+            text = response.text
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to fetch file from URL: {e}")
 
-        chunks = _simple_chunk(text)  # // TODO: replace with sentence/token splitter
+        chunks = _simple_chunk(text)
         meta_base = {
             "project_id": projectId,
-            "filename": file.filename or "upload",
+            "filename": fileUrl.split('/')[-1],  # just take filename from URL
             "uploader_id": userId,
         }
         await _store_chunks(chunks, meta_base)
