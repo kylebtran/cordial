@@ -49,7 +49,6 @@ Cordial is a web-based assistant built to help teams manage their projects more 
 3.  **Set up the Frontend:**
     *   Go to the frontend code directory (if it's separate): `cd frontend`
     *   Install its dependencies: `npm install` (or `yarn install`, etc.)
-    *   *(Add any frontend build commands if needed)*
 
 ## Configuration (`.env` file)
 
