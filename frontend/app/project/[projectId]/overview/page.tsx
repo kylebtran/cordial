@@ -84,7 +84,7 @@ interface PageProps {
 // }
 
 export default async function ProjectOverviewPage({ params }: PageProps) {
-  const { projectId } = params;
+  const { projectId } = await params;
 
   // Auth and project access are already checked by the layout,
   // but we might need the project data and role again for overview-specific content.
