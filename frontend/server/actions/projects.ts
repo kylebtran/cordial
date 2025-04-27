@@ -69,30 +69,92 @@ export async function createNewProjectAction({
     console.log(`New project created: ${newProjectId} by user ${userId}`);
 
     // --- 2. Create Admin Membership ---
+    // -- 3 [DEMO ONLY]. Add Demo Memberships ---
+    const DEMO_MEMBERS = [
+      {
+        userId: "680d4d4b0b98389574588b00",
+        name: "Lucas",
+        role: Role.DESIGNER,
+      },
+      {
+        userId: "680e120cc4c505eb35616c34",
+        name: "Aditya",
+        role: Role.DEVELOPER,
+      },
+      {
+        userId: "680e1224c4c505eb35616c35",
+        name: "Vishok",
+        role: Role.DEVOPS,
+      },
+      // Kyle (680e1249c4c505eb35616c36) is the creator, assigned ADMIN role below
+    ];
+
     const membershipsCollection = db.collection<Membership>("memberships");
-    const newMembershipData: Omit<Membership, "_id"> = {
-      projectId: newProjectId,
-      userId: userIdObject,
-      role: Role.ADMIN,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    const membershipsToInsert: Omit<Membership, "_id">[] = [
+      {
+        projectId: newProjectId,
+        userId: userIdObject,
+        role: Role.ADMIN,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      ...DEMO_MEMBERS.map((member) => {
+        try {
+          // Important: Validate demo user IDs before creating ObjectId
+          if (!ObjectId.isValid(member.userId)) {
+            console.warn(
+              `Skipping demo member ${member.name}: Invalid ObjectId format '${member.userId}'`
+            );
+            return null; // Skip this member
+          }
+          return {
+            projectId: newProjectId!, // Use non-null assertion as projectId must exist here
+            userId: new ObjectId(member.userId),
+            role: member.role,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          };
+        } catch (idError) {
+          console.error(
+            `Error creating ObjectId for demo user ${member.name} (${member.userId}):`,
+            idError
+          );
+          return null; // Skip on error
+        }
+      }).filter((m): m is Omit<Membership, "_id"> => m !== null), // Filter out nulls from map
+    ];
 
-    const membershipInsertResult = await membershipsCollection.insertOne(
-      newMembershipData as Membership
-    );
-
-    if (!membershipInsertResult.insertedId) {
-      // Optional: Consider cleanup logic if project was created but membership failed
-      console.error(
-        `CRITICAL: Project ${newProjectId} created, but failed to create owner membership for user ${userId}.`
+    if (membershipsToInsert.length > 0) {
+      console.log(
+        `Attempting to insert ${membershipsToInsert.length} memberships...`
       );
-      // Depending on requirements, you might delete the project here or just log the error.
-      throw new Error("Failed to create owner membership for the new project.");
+      const membershipInsertResult = await membershipsCollection.insertMany(
+        membershipsToInsert as Membership[] // Insert all prepared memberships
+      );
+
+      if (membershipInsertResult.insertedCount !== membershipsToInsert.length) {
+        // This indicates some memberships failed to insert, which shouldn't happen
+        // unless there's a unique index conflict or major DB issue.
+        // We already created the project, so this is problematic.
+        console.error(
+          `CRITICAL: Project ${newProjectId} created, but failed to insert all memberships. Expected ${membershipsToInsert.length}, Inserted: ${membershipInsertResult.insertedCount}`
+        );
+        // For simplicity, we'll throw, but real-world might need cleanup/retry.
+        throw new Error(
+          "Failed to create all required memberships for the new project."
+        );
+      }
+      console.log(
+        `Successfully created ${membershipInsertResult.insertedCount} memberships for project ${newProjectId}`
+      );
+    } else {
+      console.warn(
+        `No valid memberships generated to insert for project ${newProjectId}`
+      );
+      // This might happen if creator ID was invalid AND all demo IDs were invalid
+      // Throw an error because at least the creator should be added.
+      throw new Error("Failed to prepare any valid memberships for insertion.");
     }
-    console.log(
-      `Owner membership created for user ${userId} in project ${newProjectId}`
-    );
 
     // --- 3. Revalidate Paths ---
     // Revalidate the path for the project layout/overview
