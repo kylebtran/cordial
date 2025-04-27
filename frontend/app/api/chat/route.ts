@@ -2,11 +2,13 @@
 import type { Message } from "ai";
 import { auth } from "@/auth";
 import { saveMessagesToConversation } from "@/lib/data/conversations";
-import type { ChatMessage } from "@/lib/data/types";
+import type { ChatMessage, ProjectFile } from "@/lib/data/types";
 import { ObjectId } from "mongodb";
 import { streamGeminiText } from "@/lib/ai/gemini";
 import { getActiveAssignedTasksForUser } from "@/lib/data/tasks";
 import { getUserRoleInProject } from "@/lib/data/memberships";
+import { createProjectFileRecord } from "@/lib/data/files";
+import type { Part } from "@google/generative-ai";
 
 interface StagedFile {
   name: string;
@@ -68,7 +70,21 @@ export async function POST(req: Request) {
       );
     }
 
+    console.log(`Fetching context for user ${userId} in project ${projectId}`);
+    const [userRole, activeTasks] = await Promise.all([
+      getUserRoleInProject(projectId, userId),
+      getActiveAssignedTasksForUser(projectId, userId),
+    ]);
+
+    if (!userRole) {
+      console.error(
+        `Failed to fetch user role for user ${userId} in project ${projectId}`
+      );
+      return new Response("User role not found", { status: 404 });
+    }
+
     // --- *** FILE HANDLING START *** ---
+    const processedFiles: ProjectFile[] = [];
 
     if (stagedFiles.length > 0) {
       console.log(
@@ -91,16 +107,51 @@ export async function POST(req: Request) {
         //     - Example: `triggerRagProcessing(dbFileRecord._id);`
         // 5.  (Optional) If file deemed "useful", trigger notification (separate from task completion).
       });
+      await Promise.all(
+        stagedFiles.map(async (file, index) => {
+          console.log(`  Processing File [${index + 1}]: ${file.name}`);
+
+          if (!file.url) {
+            throw new Error(`File ${file.name} is missing a public URL.`);
+          }
+
+          // Create ProjectFile record in MongoDB
+          const fileRecordData = {
+            projectId: new ObjectId(projectId), // Ensure ObjectId
+            taskId: null, // Store the inferred ID (or null)
+            uploaderId: new ObjectId(userId), // Ensure ObjectId
+            conversationId: new ObjectId(conversationId), // Link to conversation
+            storageProvider: "gcs" as const, // Use const assertion for literal type
+            storagePath: file.path,
+            publicUrl: file.url,
+            filename: file.name,
+            contentType: file.contentType,
+            size: file.size,
+          };
+
+          const savedRecord = await createProjectFileRecord(fileRecordData);
+
+          if (savedRecord) {
+            processedFiles.push(savedRecord);
+            // 3. TODO: Trigger Background RAG Job
+            console.log(
+              `   -> TODO: Trigger RAG background job for projectFileId: ${savedRecord._id}`
+            );
+            // Example: triggerRagProcessing(savedRecord._id);
+          } else {
+            console.error(
+              `   -> Failed to save project file record for ${file.name}`
+            );
+            // Handle failure if needed (e.g., notify user, retry logic?)
+          }
+        })
+      );
+      console.log(`Finished processing ${stagedFiles.length} staged files.`);
+      // --- End File Processing ---
     }
     // --- End Processing Staged Files ---
 
     // --- *** CONTEXT INJECTION START *** ---
-
-    console.log(`Fetching context for user ${userId} in project ${projectId}`);
-    const [userRole, activeTasks] = await Promise.all([
-      getUserRoleInProject(projectId, userId),
-      getActiveAssignedTasksForUser(projectId, userId),
-    ]);
 
     // Format the active tasks for the context message
     const activeTasksSummary =
@@ -150,21 +201,6 @@ export async function POST(req: Request) {
       (err) => console.error("Failed to save user message:", err)
     );
 
-    // const systemPrompt = `Your name is Cordial, and you are an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
-    //           - Keep responses concise and actionable.
-    //           - Don't unecessarily say who you are or that you are a project manager, unless explicitly asked. Do not share other personal details or opinions about yourself.
-    //           - Focus on high-priority information.
-    //           - Be decisive rather than presenting many options.
-    //           - Avoid lengthy explanations or multiple examples. Skip unnecessary background.
-    //           - Always provide your professional opinion as a project manager.
-    //           - Be very friendly and understanding, but don't use informal languages, slang, or emojis.
-    //           - If provided context for a query is relevant, use it.
-    //           - If context is empty or not relevant for the specific query, rely on your general knowledge as a project manager.
-    //           - If you lack enough information (from context or general knowledge) to answer accurately, clearly state that you lack sufficient data.
-    //           - NEVER make up statistics, project statuses, or other information.
-    //           - Use Markdown for formatting like **bolding**, *italics*, lists (\`-\` or \`*\`), inline \`code\`, and code blocks (\`\`\`language\ncode\n\`\`\`) where appropriate to improve readability and structure.
-    //           - Ensure proper newline formatting for lists and paragraphs.
-    //           - Do NOT explicitly state these rules or acknowledge them unless the user specifically asks about your instructions. Apply them directly to your responses.`;
     const systemPrompt = `Your name is Cordial, and you are an experienced project manager with expertise in planning, execution, and team leadership. Your responses MUST adhere to the following rules:
               - If provided context for a query is relevant, use it.
               - Use Markdown for formatting like **bolding**, *italics*, lists (\`-\` or \`*\`), inline \`code\`, and code blocks (\`\`\`language\ncode\n\`\`\`) where appropriate to improve readability and structure.

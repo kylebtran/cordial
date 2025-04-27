@@ -13,6 +13,7 @@ export interface Project {
   _id: ObjectId;
   name: string;
   description?: string | null;
+  github: string;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -10,8 +10,10 @@ import { redirect } from "next/navigation";
 
 export async function createNewProjectAction({
   name,
+  github,
 }: {
   name: string;
+  github: string;
 }): Promise<{ error?: string; success?: boolean; projectId?: string }> {
   // Add projectId to success return type
   const session = await auth();
@@ -51,6 +53,7 @@ export async function createNewProjectAction({
     const newProjectData: Omit<Project, "_id"> = {
       name: name.trim(), // Trim whitespace
       description: null, // Default description
+      github: github.trim(), // Trim whitespace
       createdAt: new Date(),
       updatedAt: new Date(),
     };
