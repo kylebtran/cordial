@@ -9,8 +9,10 @@ from pydantic import BaseModel
 import requests
 from bson import ObjectId
 from dotenv import load_dotenv
+from jira_helpers import generate_project_structure_from_manifest, populate_jira_project, get_jira_api_key  # Import the API key function
 
-load_dotenv()
+# Load environment variables
+load_dotenv()  # This is key - it wasn't loading the .env file properly
 
 # MongoDB Configuration
 MONGO_URI = os.getenv("MONGO_URI")
@@ -20,6 +22,7 @@ print(f"[DEBUG] Connecting to MongoDB: {MONGO_URI}")
 mongo_client = AsyncIOMotorClient(MONGO_URI)
 db = mongo_client[DB_NAME]
 project_files_collection = db[PROJECTFILES_COLLECTION]
+projects_collection = db["projects"]
 
 # Google Cloud Storage Configuration
 storage_client = storage.Client.from_service_account_json("../frontend/key.json")
@@ -39,17 +42,14 @@ async def monitor_for_manifest_file(project_id: str):
     """
     print(f"[DEBUG] Starting monitor for project {project_id}")
     
-    # Look only for recent files (within the last hour to start)
-    start_time = datetime.utcnow() - timedelta(hours=1)
+    start_time = datetime.fromtimestamp(0)  # Start from Unix epoch to find anything
     
-    # Verify database connection
     try:
         server_info = await mongo_client.server_info()
         print(f"[DEBUG] Connected to MongoDB: {server_info.get('version', 'unknown version')}")
     except Exception as e:
         print(f"[DEBUG] Failed to connect to MongoDB: {str(e)}")
     
-    # Verify collection exists
     collections = await db.list_collection_names()
     print(f"[DEBUG] Available collections: {collections}")
     
@@ -57,44 +57,38 @@ async def monitor_for_manifest_file(project_id: str):
     while project_id in active_monitors:
         poll_count += 1
         try:
-            # Query for any .txt files for this project created since we last checked
             query = {
                 "projectId": ObjectId(project_id),
-                "filename": {"$regex": r"\.txt$"},
-                "createdAt": {"$gte": start_time}
+                "filename": {"$regex": r"\.txt$"}
             }
             
             print(f"[DEBUG] Poll #{poll_count} - Executing query: {query}")
             
-            # First, count matching documents
             count = await project_files_collection.count_documents(query)
             print(f"[DEBUG] Found {count} matching documents")
             
-            # If we have matches, process them
             if count > 0:
-                # Find any matching files
                 cursor = project_files_collection.find(query).sort("createdAt", 1)
                 
                 file_found = False
                 async for file_metadata in cursor:
                     file_found = True
                     print(f"[DEBUG] Processing file metadata: {file_metadata}")
-                    print(f"Found manifest file: {file_metadata['filename']}")
+                    print(f"Found manifest file: {file_metadata.get('filename', 'unknown')}")
                     
-                    # Check if publicUrl exists
                     if 'publicUrl' not in file_metadata:
                         print(f"[DEBUG] No publicUrl found in file metadata")
                         continue
                     
-                    # Download the file from Google Cloud Storage
                     download_url = file_metadata['publicUrl']
                     print(f"[DEBUG] Downloading from URL: {download_url}")
                     file_content = download_file_from_gcs(download_url)
                     
-                    # Process the manifest file content
-                    process_manifest(file_content)
+                    print("[DEBUG] Manifest file downloaded, starting Jira population process.")
+                    # Get Jira API token here in the listener
+                    jira_api_token = get_jira_api_key()  
+                    await populate_jira_with_manifest(file_content, project_id, jira_api_token)
                     
-                    # Stop monitoring after finding and processing the file
                     active_monitors.pop(project_id, None)
                     print(f"Monitoring ended for project {project_id}")
                     return
@@ -102,63 +96,54 @@ async def monitor_for_manifest_file(project_id: str):
                 if not file_found:
                     print(f"[DEBUG] Cursor returned no documents despite count={count}")
             
-            # Let's also try a more general query to see what's in the collection
-            if poll_count % 10 == 1:  # Only do this periodically to avoid log spam
+            if poll_count % 10 == 1:
                 print(f"[DEBUG] Checking for ANY files for this project")
                 any_files_query = {"projectId": ObjectId(project_id)}
                 any_count = await project_files_collection.count_documents(any_files_query)
                 print(f"[DEBUG] Found {any_count} total files for this project")
                 
                 if any_count > 0:
-                    # Show some sample files
                     async for doc in project_files_collection.find(any_files_query).limit(3):
                         print(f"[DEBUG] Sample file: {doc.get('filename', 'unknown')} - Created: {doc.get('createdAt', 'unknown')}")
+                else:
+                    total_count = await project_files_collection.count_documents({})
+                    print(f"[DEBUG] Total documents in collection: {total_count}")
             
-            # Update the time for the next query to only look for new files
-            start_time = datetime.utcnow()
+            if poll_count > 5:
+                start_time = datetime.utcnow()
             
-            # Sleep before checking again
             print(f"[DEBUG] Sleeping for 5 seconds before next poll")
-            await asyncio.sleep(5)  # Poll every 5 seconds
+            await asyncio.sleep(5)
             
         except Exception as e:
             print(f"[DEBUG] Error in monitor loop: {str(e)}")
             import traceback
             traceback.print_exc()
-            await asyncio.sleep(5)  # Continue with polling even after errors
+            await asyncio.sleep(5)
 
 def download_file_from_gcs(url: str) -> str:
     """Download file content from Google Cloud Storage"""
     try:
         print(f"[DEBUG] Attempting to download from: {url}")
-        # Make a request to Google Cloud to fetch the file content
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for bad status codes
+        response.raise_for_status()
         content = response.text
         print(f"[DEBUG] Successfully downloaded {len(content)} bytes")
         return content
     except Exception as e:
         print(f"[DEBUG] Error downloading file from GCS: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return ""
 
-def process_manifest(file_content: str):
-    """Process the content of the manifest file"""
-    try:
-        print(f"[DEBUG] Processing manifest content length: {len(file_content)}")
-        if len(file_content) < 100:  # Only show the full content if it's small
-            print(f"[DEBUG] Content: {file_content}")
-        else:
-            print(f"[DEBUG] Content excerpt: {file_content[:100]}...")
-            
-        # Add your manifest processing logic here
-        # For example, parse JSON content and take actions based on it
-        manifest_data = json.loads(file_content)
-        print(f"[DEBUG] Parsed manifest data: {manifest_data}")
-        # Implement additional processing logic as needed
-    except json.JSONDecodeError:
-        print("[DEBUG] The manifest file is not valid JSON")
-    except Exception as e:
-        print(f"[DEBUG] Error processing manifest: {str(e)}")
+async def populate_jira_with_manifest(file_content: str, project_id: str, jira_api_token: str):
+    """Populate Jira with epics, stories, and tasks from the manifest"""
+    print("[DEBUG] Starting to process the manifest into epics, stories, and tasks...")
+    epics, stories, tasks = await generate_project_structure_from_manifest(file_content)
+    
+    print("[DEBUG] Populating Jira with the generated epics, stories, and tasks.")
+    populate_jira_project(epics, stories, tasks, project_id, jira_api_token)
+    print("[DEBUG] Jira population process completed.")
 
 @app.post("/process-manifest/")
 async def project_created(project: ProjectCreated, background_tasks: BackgroundTasks):
@@ -166,14 +151,11 @@ async def project_created(project: ProjectCreated, background_tasks: BackgroundT
     project_id = project.projectId
     print(f"Project {project_id} created, now monitoring for manifest file...")
     
-    # Stop any existing monitoring task for this project
     if project_id in active_monitors:
         active_monitors.pop(project_id, None)
     
-    # Mark this project as being monitored
     active_monitors[project_id] = True
     
-    # Start monitoring in the background
     background_tasks.add_task(monitor_for_manifest_file, project_id)
     
     return {"status": "monitoring_started", "project_id": project_id}
