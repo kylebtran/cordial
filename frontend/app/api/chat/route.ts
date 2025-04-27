@@ -93,6 +93,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Process Staged Files & Persist Metadata (No AI Task Linking Yet) ---
+    let publicUrl: string | null = null;
     const processedFileRecords: ProjectFile[] = [];
     if (stagedFiles.length > 0) {
       console.log(
@@ -122,9 +123,12 @@ export async function POST(req: NextRequest) {
             size: file.size,
           };
 
-          const savedRecord = await createProjectFileRecord(fileRecordData);
+          const savedRecord = (await createProjectFileRecord(
+            fileRecordData
+          )) as ProjectFile | null;
 
           if (savedRecord) {
+            publicUrl = savedRecord.publicUrl;
             processedFileRecords.push(savedRecord);
             // 3. TODO: Trigger Background RAG Job (Placeholder)
             console.log(
@@ -132,6 +136,7 @@ export async function POST(req: NextRequest) {
             );
             // triggerRagProcessing(savedRecord._id);
           } else {
+            publicUrl = null;
             console.error(
               `   -> Failed to save project file record for ${file.name}`
             );
@@ -159,6 +164,17 @@ export async function POST(req: NextRequest) {
       // Note: We are NOT adding the actual file content here yet.
     }
     contextMessageContent += "\n---";
+    const formData = new FormData();
+
+    // Append the fields to the FormData object
+    formData.append("message", lastUserMessage.content);
+    formData.append("projectId", projectId);
+    formData.append("userId", userId);
+
+    // If `publicUrl` exists, append it
+    if (publicUrl) {
+      formData.append("file", publicUrl);
+    }
 
     const contextMessage: Message = {
       role: "system",
@@ -166,6 +182,50 @@ export async function POST(req: NextRequest) {
       id: `context-${conversationId}-${Date.now()}`,
     };
     const messagesForAI: Message[] = [contextMessage, ...originalMessages]; // Send context + original history
+    const ragFastApiResponse = await fetch(
+      "http://127.0.0.1:8000/api/rag/chat",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.FASTAPI_SECRET || ""}`, // Optional
+        },
+        body: JSON.stringify({
+          message: lastUserMessage.content,
+          projectId: projectId,
+          userId: userId,
+          file: publicUrl,
+        }),
+      }
+    );
+
+    if (!ragFastApiResponse.ok) {
+      console.error(
+        "FastAPI RAG server error:",
+        await ragFastApiResponse.text()
+      );
+    } else {
+      const ragData = await ragFastApiResponse.json();
+      console.log("Received RAG results from FastAPI:", ragData);
+
+      if (ragData.results && ragData.results.length > 0) {
+        const ragContext = ragData.results
+          .map(
+            (doc: { content: string }, idx: number) =>
+              `(${idx + 1}) ${doc.content}`
+          )
+          .join("\n\n");
+
+        const fastApiRagMessage: Message = {
+          role: "system",
+          content: `ADDITIONAL CONTEXT FROM RAG SERVER:\n${ragContext}\n---`,
+          id: `rag-fastapi-${conversationId}-${Date.now()}`,
+        };
+
+        messagesForAI.unshift(fastApiRagMessage); // Add to the beginning
+      }
+    }
+
     console.log(
       `Context injected. Total messages for AI: ${messagesForAI.length}`
     );
