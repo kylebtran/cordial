@@ -24,9 +24,9 @@ export function ChatSidebar({
   const [search, setSearch] = useState<string>("");
 
   return (
-    <aside className="w-[260px] flex flex-col gap-4 overflow-y-auto border-x border-t border-outline mt-12">
+    <aside className="w-[260px] flex flex-col gap-4 overflow-y-auto border-x border-t border-outline mt-12 scrollbar-hide">
       {/* Button to create a new chat */}
-      <div className="flex flex-col w-full gap-2 p-4">
+      <div className="sticky top-0 flex flex-col w-full gap-2 p-4 bg-background">
         <Searchbar search={search} setSearch={setSearch} />
         <CreateNewChatButton projectId={projectId} />
       </div>
@@ -37,7 +37,7 @@ export function ChatSidebar({
         </h3>
         <ul className="space-y-0">
           {initialConversations.length === 0 ? (
-            <li className="text-foreground">No chats yet.</li>
+            <li className="text-foreground ml-4">No chats yet.</li>
           ) : (
             initialConversations.map((convo) => {
               const isActive = activeConversationId === convo._id.toString();
