@@ -24,20 +24,20 @@ export function ChatSidebar({
   const [search, setSearch] = useState<string>("");
 
   return (
-    <aside className="w-[260px] flex flex-col gap-4 p-4 overflow-y-auto border-x border-t border-outline mt-12">
+    <aside className="w-[260px] flex flex-col gap-4 overflow-y-auto border-x border-t border-outline mt-12">
       {/* Button to create a new chat */}
-      <div className="flex flex-col w-full gap-2">
+      <div className="flex flex-col w-full gap-2 p-4">
         <Searchbar search={search} setSearch={setSearch} />
         <CreateNewChatButton projectId={projectId} />
       </div>
 
       <nav className="flex-grow">
-        <h3 className="text-[12px] font-semibold text-foreground/70 mb-2 uppercase">
+        <h3 className="text-[12px] font-semibold text-foreground/70 mb-2 uppercase ml-4">
           Recents
         </h3>
         <ul className="space-y-0">
           {initialConversations.length === 0 ? (
-            <li className="text-foreground px-2">No chats yet.</li>
+            <li className="text-foreground">No chats yet.</li>
           ) : (
             initialConversations.map((convo) => {
               const isActive = activeConversationId === convo._id.toString();
@@ -45,7 +45,7 @@ export function ChatSidebar({
                 <li key={convo._id.toString()}>
                   <Link
                     href={`/project/${projectId}/chat/${convo._id.toString()}`}
-                    className={`block px-3 py-2 rounded text-sm font-medium truncate transition-all ease-in-out duration-300 ${
+                    className={`block px-4 py-2  text-sm font-medium truncate transition-all ease-in-out duration-300 ${
                       isActive
                         ? "bg-outline/50" // Active chat styling
                         : "text-foreground/70 hover:bg-outline/20 hover:text-white" // Inactive chat styling

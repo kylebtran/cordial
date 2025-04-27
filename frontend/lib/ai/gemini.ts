@@ -1,5 +1,11 @@
 // lib/ai/gemini.ts
-import { streamText, type Message, type CoreTool, StreamTextResult } from "ai";
+import {
+  streamText,
+  type Message,
+  type CoreTool,
+  StreamTextResult,
+  generateText,
+} from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { smoothStream } from "ai";
@@ -108,3 +114,66 @@ if (someCondition) {
     model = google('models/gemini-2.0-flash', { safetySettings });
 }
 */
+
+/**
+ * Generates a short, descriptive title for a conversation based on the first user message.
+ *
+ * @param firstUserMessageContent The content of the user's first message.
+ * @returns A short title string (e.g., 3-5 words) or null if generation fails.
+ */
+export async function generateChatTitle(
+  firstUserMessageContent: string
+): Promise<string | null> {
+  // Avoid generating titles for trivial messages
+  if (
+    !firstUserMessageContent ||
+    firstUserMessageContent.trim().length < 5 ||
+    firstUserMessageContent.toLowerCase() === "hi" ||
+    firstUserMessageContent.toLowerCase() === "hello"
+  ) {
+    console.log("Skipping title generation for trivial first message.");
+    // Return a default or null - maybe just "New Chat"? Or let it stay null.
+    // For now, return null to indicate no specific title was generated.
+    return null;
+  }
+
+  const prompt = `Based on the following user's first message, create a very concise and descriptive title for the chat conversation (3-5 words maximum).
+
+User Message: """
+${firstUserMessageContent}
+"""
+
+Chat Title:`;
+
+  try {
+    console.log(`Generating chat title for first message...`);
+    // Use a faster model if preferred, as title generation is less complex
+    const model = google("models/gemini-1.5-flash", { safetySettings });
+
+    const result = await generateText({
+      model: model,
+      prompt: prompt,
+      temperature: 0.4, // Slightly lower temp for more predictable titles
+    });
+
+    let title = result.text.trim();
+
+    // Basic cleanup: remove potential quotes, ensure reasonable length
+    title = title.replace(/["']/g, ""); // Remove surrounding quotes
+    if (title.length > 50) {
+      // Trim excessively long titles
+      title = title.substring(0, 47) + "...";
+    }
+
+    if (title) {
+      console.log(`Generated chat title: "${title}"`);
+      return title;
+    } else {
+      console.warn("Chat title generation resulted in empty string.");
+      return null;
+    }
+  } catch (error) {
+    console.error(`Error generating chat title:`, error);
+    return null; // Return null on error
+  }
+}

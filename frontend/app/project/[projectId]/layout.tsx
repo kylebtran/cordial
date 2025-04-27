@@ -24,7 +24,7 @@ export default async function ProjectLayout({
   children,
   params,
 }: ProjectLayoutProps) {
-  const { projectId } = params;
+  const { projectId } = await params;
 
   // --- Authentication & Project Access Check ---
   // This check runs for ALL routes nested under /project/[projectId]/*

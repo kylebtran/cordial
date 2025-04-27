@@ -8,7 +8,8 @@ import React, {
   ChangeEvent,
   FormEvent,
   useEffect,
-} from "react"; // Import FormEvent
+} from "react"; // Import FormEvent and other hooks
+import { useMemo } from "react"; // Properly import useMemo
 import type { SerializedChatMessage } from "@/lib/data/types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -45,20 +46,28 @@ interface ChatInterfaceProps {
 export function ChatInterface({
   conversationId,
   projectId,
-  initialMessages,
+  initialMessages: initialMessagesProp,
 }: ChatInterfaceProps) {
+  // --- Memoize the mapped initial messages ---
+  const memoizedInitialMessages = useMemo(() => {
+    // This code only runs if initialMessagesProp actually changes reference
+    return mapInitialMessages(initialMessagesProp);
+  }, [initialMessagesProp]); // Dependency is the prop from the parent
+  // -------------------------------------------
+
   const {
     messages,
     input,
     handleInputChange,
-    // We need 'append' or the original handleSubmit to send the message
-    handleSubmit: originalHandleSubmit, // Keep the original submit handler
+    handleSubmit: originalHandleSubmit,
     isLoading: isAiLoading,
     error: aiError,
-    setInput, // Still needed
+    setInput,
   } = useChat({
     api: "/api/chat",
-    initialMessages: mapInitialMessages(initialMessages),
+    // --- Use the MEMOIZED value here ---
+    initialMessages: memoizedInitialMessages,
+    // ---------------------------------
     onError: (err) => {
       console.error("AI Chat error:", err);
     },
