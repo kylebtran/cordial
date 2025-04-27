@@ -27,7 +27,7 @@ export async function handleLogin(prevState: unknown, formData: FormData) {
     await signIn("credentials", {
       email,
       password,
-      redirectTo: "/dashboard",
+      redirectTo: "/project/680e165ec4c505eb35616c38/overview",
     });
   } catch (error) {
     console.error("Login action error caught:", error);

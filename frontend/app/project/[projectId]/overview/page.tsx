@@ -84,7 +84,7 @@ interface PageProps {
 // }
 
 export default async function ProjectOverviewPage({ params }: PageProps) {
-  const { projectId } = params;
+  const { projectId } = await params;
 
   // Auth and project access are already checked by the layout,
   // but we might need the project data and role again for overview-specific content.
@@ -102,16 +102,14 @@ export default async function ProjectOverviewPage({ params }: PageProps) {
   // This page can focus on project-level details, settings, stats, etc.
 
   return (
-    <div className="p-6">
+    <div className="border-t border-outline p-6">
       {/* Header might be redundant if similar info is in layout sidebar */}
-      <h1 className="text-2xl font-bold mb-4">
-        Project Overview: {project.name}
-      </h1>
+      <h1 className="text-2xl font-bold mb-4">{project.name}</h1>
       <p className="mb-4">
         {project.description || "No description provided."}
       </p>
 
-      <div className="bg-white p-4 rounded shadow">
+      <div className="p-4 rounded shadow">
         <h2 className="text-lg font-semibold mb-2">Project Details</h2>
         <p>
           <strong>Your Role:</strong> {userRole}
